@@ -115,10 +115,17 @@ class CommandDispatcher(Node):
     # ROS callbacks
     # ------------------------------------------------------------------
     def on_command(self, msg: String) -> None:
+        # Loud, unambiguous ack so you can confirm the message reached us.
+        self.get_logger().info("=" * 60)
+        self.get_logger().info(f"COMMAND RECEIVED: {msg.data!r}")
+        self.get_logger().info("=" * 60)
+
         intent = self.parse(msg.data)
         if intent is None:
-            self._say(f"didn't understand: {msg.data!r}")
+            self._say(f"could not parse intent from: {msg.data!r}")
             return
+
+        self.get_logger().info(f"parsed intent: {intent}")
 
         if intent["action"] == "stop":
             self._cancel_goal()
@@ -144,8 +151,13 @@ class CommandDispatcher(Node):
     # Nav2 plumbing
     # ------------------------------------------------------------------
     def _send_goal(self, x: float, y: float, yaw: float) -> None:
-        if not self.nav_client.wait_for_server(timeout_sec=5.0):
-            self._say("nav2 action server unavailable")
+        self.get_logger().info(f"waiting for /navigate_to_pose action server...")
+        if not self.nav_client.wait_for_server(timeout_sec=10.0):
+            self._say(
+                "Nav2 action server NOT AVAILABLE. Is navigation.launch.py "
+                "running, and has it finished activating? (Watch its log for "
+                "'Creating bond timer...')."
+            )
             return
         goal = NavigateToPose.Goal()
         goal.pose = PoseStamped()
@@ -154,14 +166,16 @@ class CommandDispatcher(Node):
         goal.pose.pose.position.x = float(x)
         goal.pose.pose.position.y = float(y)
         goal.pose.pose.orientation = yaw_to_quat(float(yaw))
+        self.get_logger().info(f"sending Nav2 goal: x={x:.2f} y={y:.2f} yaw={yaw:.2f}")
         future = self.nav_client.send_goal_async(goal)
         future.add_done_callback(self._on_goal_response)
 
     def _on_goal_response(self, future) -> None:
         gh = future.result()
         if not gh.accepted:
-            self._say("nav2 rejected the goal")
+            self._say("nav2 REJECTED the goal")
             return
+        self.get_logger().info("nav2 ACCEPTED the goal — driving...")
         self._goal_handle = gh
         gh.get_result_async().add_done_callback(self._on_result)
 

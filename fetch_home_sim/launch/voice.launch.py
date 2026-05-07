@@ -1,14 +1,15 @@
-"""Command pipeline: input source + dispatcher + arm_reach.
+"""Command pipeline: optional voice node + dispatcher + arm_reach.
 
 Args:
   mode:=voice         Live mic + Whisper STT (default).
-  mode:=text          stdin prompt (no audio deps required).
   mode:=none          No input node — publish to /spoken_command yourself.
 
-Examples:
-  ros2 launch fetch_home_sim voice.launch.py mode:=voice whisper_model:=base.en
-  ros2 launch fetch_home_sim voice.launch.py mode:=text
-  ros2 launch fetch_home_sim voice.launch.py mode:=none
+For text input, run the standalone node in its OWN terminal:
+
+    ros2 run fetch_home_sim text_input
+
+stdin is not piped through ros2 launch reliably, so the text node only works
+when launched directly.
 """
 from __future__ import annotations
 
@@ -28,7 +29,6 @@ def generate_launch_description() -> LaunchDescription:
 
     mode = LaunchConfiguration("mode")
     is_voice = PythonExpression(["'", mode, "' == 'voice'"])
-    is_text = PythonExpression(["'", mode, "' == 'text'"])
 
     voice_node = Node(
         package="fetch_home_sim",
@@ -40,15 +40,6 @@ def generate_launch_description() -> LaunchDescription:
             "device": LaunchConfiguration("mic_device"),
         }],
         condition=IfCondition(is_voice),
-    )
-
-    text_node = Node(
-        package="fetch_home_sim",
-        executable="text_input",
-        name="text_input",
-        output="screen",
-        emulate_tty=True,
-        condition=IfCondition(is_text),
     )
 
     dispatcher = Node(
@@ -72,14 +63,14 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription([
         DeclareLaunchArgument("mode", default_value="voice",
-                              description="voice | text | none"),
+                              description="voice | none. For text mode, run "
+                              "'ros2 run fetch_home_sim text_input' separately."),
         DeclareLaunchArgument("whisper_model", default_value="base.en",
                               description="Whisper model: tiny.en | base.en | small.en | medium.en"),
         DeclareLaunchArgument("mic_device", default_value="-1",
                               description="sounddevice index, -1 = system default"),
         DeclareLaunchArgument("waypoints_file", default_value=waypoints),
         voice_node,
-        text_node,
         dispatcher,
         arm,
     ])

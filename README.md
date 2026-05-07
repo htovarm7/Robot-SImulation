@@ -1,6 +1,6 @@
 # Fetch Home Simulation — Gazebo Classic + ROS 2 Humble
 
-> Created by [Hector Tovar](mailto:h.tovarm07@gmail.com)
+> Created by [Hector Tovar](https://github.com/htovarm7)
 
 A Gazebo simulation of the **Fetch mobile manipulator** operating inside a furnished home. The robot listens to spoken commands like *"pick up the banana from the kitchen"*, parses the intent, plans a path with Nav2 around obstacles, drives smoothly to the target room, and performs an arm-reach gesture on arrival.
 
@@ -130,7 +130,7 @@ export FETCH_HOME_SIM_REPO=~/Desktop/Robot-SImulation
 
 ## Run
 
-Three terminals (each needs `source ~/fetch_ws/install/setup.bash` and the `FETCH_HOME_SIM_REPO` export):
+Each terminal needs `source ~/fetch_ws/install/setup.bash` and the `FETCH_HOME_SIM_REPO` export.
 
 ```bash
 # Terminal 1 — Gazebo + robot + scene
@@ -139,11 +139,24 @@ ros2 launch fetch_home_sim simulation.launch.py
 # Terminal 2 — Nav2 with online SLAM (RViz comes up too)
 ros2 launch fetch_home_sim navigation.launch.py mode:=slam
 
-# Terminal 3 — input pipeline. Pick a mode:
-ros2 launch fetch_home_sim voice.launch.py mode:=text                            # type commands
+# Terminal 3 — auto-mapping tour (one-shot). Drives a fixed loop through the
+# whole house so the SLAM map covers everything, then returns home and prints
+# "MAPPING TOUR COMPLETE — robot is READY for commands." Takes ~1–2 minutes.
+ros2 run fetch_home_sim auto_mapper
+
+# Terminal 4 — dispatcher + arm_reach + (optional) voice listener
 ros2 launch fetch_home_sim voice.launch.py mode:=voice whisper_model:=base.en    # live mic + Whisper
-ros2 launch fetch_home_sim voice.launch.py mode:=none                            # publish manually
+ros2 launch fetch_home_sim voice.launch.py mode:=none                            # no input node
+
+# Terminal 5 (only for text mode) — run text_input standalone, stdin only works this way
+ros2 run fetch_home_sim text_input
 ```
+
+> **Why the auto_mapper step?** In SLAM mode the costmap only knows what the
+> laser has seen. Sending *"go to the kitchen"* before the robot has driven
+> there causes Nav2 to reject the goal because the destination is in
+> unknown space. The tour seeds the map; after it finishes, every named
+> waypoint is reachable. You can skip it once you save a map (see below).
 
 Or once everything is happy, the all-in-one:
 
@@ -166,8 +179,8 @@ ros2 launch fetch_home_sim navigation.launch.py mode:=localization \
 
 Three input modes, picked via the `mode:=` arg on `voice.launch.py`:
 
-### Text mode (`mode:=text`)
-Type commands in the terminal — no audio stack needed. Best for first run, scripted demos, or when the mic is uncooperative.
+### Text mode (`ros2 run fetch_home_sim text_input`)
+Run the text node in its own terminal — no audio stack needed. Best for first run, scripted demos, or when the mic is uncooperative.
 
 ```
 > pick up the banana from the kitchen
@@ -175,6 +188,8 @@ Type commands in the terminal — no audio stack needed. Best for first run, scr
 > stop
 > quit
 ```
+
+The dispatcher prints `COMMAND RECEIVED: ...` for every message on `/spoken_command`, followed by the parsed intent and the Nav2 goal lifecycle.
 
 ### Voice mode (`mode:=voice`)
 Live microphone → energy gate → Whisper STT → `/spoken_command`. No wake word; Whisper fires after ~700 ms of silence.

@@ -155,7 +155,10 @@ global_costmap:
       robot_base_frame: base_link
       robot_radius: 0.30
       resolution: 0.05
-      track_unknown_space: true
+      # Treat unmapped cells as free so the planner can drive into rooms
+      # the laser hasn't seen yet (SLAM mode). Combined with
+      # planner.allow_unknown=true this lets the robot explore.
+      track_unknown_space: false
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"

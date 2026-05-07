@@ -30,6 +30,7 @@ setup(
             'text_input = fetch_home_sim.text_input:main',
             'command_dispatcher = fetch_home_sim.command_dispatcher:main',
             'arm_reach = fetch_home_sim.arm_reach:main',
+            'auto_mapper = fetch_home_sim.auto_mapper:main',
         ],
     },
 )

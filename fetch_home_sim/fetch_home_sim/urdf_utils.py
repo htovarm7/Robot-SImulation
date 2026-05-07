@@ -67,6 +67,16 @@ def prepare_fetch_urdf() -> str:
         flags=re.DOTALL,
     )
 
+    # The shipped URDF zeroed base_link's diagonal inertia (only izz is set).
+    # Gazebo's physics produce NaN poses/velocities with that, which cascades
+    # into TF as NaN translations on torso_lift_link and the gripper fingers,
+    # which then breaks Nav2. Restore the original positive Fetch values.
+    raw = re.sub(
+        r'<inertia\s+ixx="0"\s+ixy="0"\s+ixz="0"\s+iyy="0"\s+iyz="0"\s+izz="0\.987"\s*/>',
+        '<inertia ixx="1.225" ixy="0.0099" ixz="0.0062" iyy="1.2853" iyz="-0.0034" izz="0.987" />',
+        raw,
+    )
+
     plugin_block = (PKG_URDF_DIR / "fetch_gazebo.xml").read_text()
     raw = re.sub(r"</robot>\s*$", plugin_block + "\n</robot>\n", raw)
     return raw

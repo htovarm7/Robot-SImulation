@@ -73,17 +73,31 @@ ros2 launch fetch_home_sim simulation.launch.py
 # Terminal 2 — Nav2 + online SLAM (RViz comes up too)
 ros2 launch fetch_home_sim navigation.launch.py mode:=slam
 
-# Terminal 3 — input pipeline (pick one mode)
-ros2 launch fetch_home_sim voice.launch.py mode:=text                    # type at terminal
+# Terminal 3 — one-shot auto-mapping tour (fills in the SLAM map). ~1–2 min.
+ros2 run fetch_home_sim auto_mapper
+
+# Terminal 4 — dispatcher + arm_reach + (optional) voice listener
 ros2 launch fetch_home_sim voice.launch.py mode:=voice whisper_model:=base.en   # live mic
-ros2 launch fetch_home_sim voice.launch.py mode:=none                    # publish manually
+ros2 launch fetch_home_sim voice.launch.py mode:=none                           # no input node
+
+# Terminal 5 (text mode only) — run the text node STANDALONE so stdin works
+ros2 run fetch_home_sim text_input
 ```
+
+> **Why auto_mapper first?** In SLAM mode the global costmap only contains
+> what the laser has seen. A *"go to the kitchen"* command before the robot
+> has driven there gets rejected because the goal is in unknown space.
+> The mapper drives a tour through every room (~1–2 min), returns home, and
+> announces `MAPPING TOUR COMPLETE — robot is READY for commands.`
+
+> **Why a 4th terminal for text mode?** `ros2 launch` doesn't reliably pipe
+> stdin to launched nodes, so `text_input` has to run directly via `ros2 run`.
 
 ## 4. Talk to the robot
 
 ### Text mode
 
-After `mode:=text`, just type and press Enter:
+In the terminal running `ros2 run fetch_home_sim text_input`, type and press Enter:
 
 ```
 > pick up the banana from the kitchen
@@ -92,6 +106,10 @@ After `mode:=text`, just type and press Enter:
 > stop
 > quit
 ```
+
+The dispatcher prints a loud `COMMAND RECEIVED: ...` block whenever a
+message lands on `/spoken_command`, followed by the parsed intent and the
+Nav2 goal lifecycle (accepted → driving → arrived).
 
 ### Voice mode
 
