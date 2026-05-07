@@ -58,17 +58,17 @@ controller_server:
       debug_trajectory_details: false
       min_vel_x: -0.1
       min_vel_y: 0.0
-      max_vel_x: 0.45
+      max_vel_x: 0.25
       max_vel_y: 0.0
-      max_vel_theta: 1.2
+      max_vel_theta: 0.8
       min_speed_xy: 0.0
-      max_speed_xy: 0.45
+      max_speed_xy: 0.25
       min_speed_theta: 0.0
-      acc_lim_x: 1.0
+      acc_lim_x: 0.5
       acc_lim_y: 0.0
-      acc_lim_theta: 2.0
-      decel_lim_x: -1.5
-      decel_lim_theta: -2.5
+      acc_lim_theta: 1.5
+      decel_lim_x: -0.8
+      decel_lim_theta: -2.0
       vx_samples: 20
       vy_samples: 0
       vtheta_samples: 40
@@ -125,7 +125,9 @@ local_costmap:
           clearing: true
           marking: true
           data_type: "LaserScan"
+          obstacle_min_range: 0.40
           obstacle_max_range: 5.5
+          raytrace_min_range: 0.40
           raytrace_max_range: 6.0
 
 global_costmap:
@@ -153,7 +155,9 @@ global_costmap:
           clearing: true
           marking: true
           data_type: "LaserScan"
+          obstacle_min_range: 0.40
           obstacle_max_range: 5.5
+          raytrace_min_range: 0.40
           raytrace_max_range: 6.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -219,10 +223,10 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    max_velocity: [0.45, 0.0, 1.2]
-    min_velocity: [-0.1, 0.0, -1.2]
-    max_accel: [1.0, 0.0, 2.0]
-    max_decel: [-1.5, 0.0, -2.5]
+    max_velocity: [0.25, 0.0, 0.8]
+    min_velocity: [-0.1, 0.0, -0.8]
+    max_accel: [0.5, 0.0, 1.5]
+    max_decel: [-0.8, 0.0, -2.0]
     odom_topic: "odom"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

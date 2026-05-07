@@ -77,16 +77,73 @@ def prepare_fetch_urdf() -> str:
         raw,
     )
 
-    # Lock torso_lift_joint and the gripper finger joints as fixed.
-    # They're prismatic with tiny inertia and no controllers, which makes
-    # Gazebo's physics produce NaN positions → NaN TFs → Nav2 can't plan.
-    # The arm-reach demo doesn't need them.
-    for jname in ("torso_lift_joint", "l_gripper_finger_joint", "r_gripper_finger_joint"):
+    # Lock every non-driving joint as fixed. Without controllers, free
+    # revolute/prismatic joints (arm, torso, grippers) flop under gravity
+    # and the solver produces NaN velocities — which cascades into
+    # base_link physics and the diff drive can't move. Wheels stay
+    # continuous so they roll; head joints stay revolute so the head can
+    # be commanded later. Everything else: fixed.
+    JOINTS_TO_FIX = (
+        "torso_lift_joint",
+        "shoulder_pan_joint", "shoulder_lift_joint",
+        "upperarm_roll_joint", "elbow_flex_joint",
+        "forearm_roll_joint", "wrist_flex_joint", "wrist_roll_joint",
+        "l_gripper_finger_joint", "r_gripper_finger_joint",
+        "bellows_joint",
+    )
+    for jname in JOINTS_TO_FIX:
         raw = re.sub(
             rf'(<joint\s+name="{jname}"\s+type=)"(prismatic|revolute|continuous)"',
             r'\1"fixed"',
             raw,
         )
+
+    # Bake the Fetch "tuck" pose into the now-fixed arm joint origins so
+    # the arm folds against the body instead of sticking out forward.
+    # Each joint's origin had rpy="0 0 0" and a clean axis (z/y/x), so we
+    # can write the tuck angle directly into the matching rpy component.
+    TUCK_RPY = {
+        "shoulder_pan_joint":  "0 0 1.32",      # axis z, swing arm to the side
+        "shoulder_lift_joint": "0 1.40 0",      # axis y, lift up
+        "upperarm_roll_joint": "-0.20 0 0",     # axis x, slight roll
+        "elbow_flex_joint":    "0 1.72 0",      # axis y, bend elbow back
+        "forearm_roll_joint":  "0 0 0",         # neutral
+        "wrist_flex_joint":    "0 1.66 0",      # axis y, curl wrist
+        "wrist_roll_joint":    "0 0 0",         # neutral
+    }
+    for jname, new_rpy in TUCK_RPY.items():
+        raw = re.sub(
+            rf'(<joint\s+name="{jname}"\s+type="fixed">\s*<origin\s+)rpy="[^"]*"',
+            rf'\1rpy="{new_rpy}"',
+            raw,
+        )
+
+    # Make every fixed manipulator link massless. Their default URDF masses
+    # are offset from base_link's center, which torques the robot under
+    # gravity (arm pulls it onto its side, costmap then says "out of
+    # bounds"). With mass≈0 the visual model is unchanged but the rigid
+    # body's inertia is dominated by base_link, keeping the robot level.
+    MASSLESS_LINKS = (
+        "torso_lift_link", "torso_fixed_link",
+        "shoulder_pan_link", "shoulder_lift_link",
+        "upperarm_roll_link", "elbow_flex_link",
+        "forearm_roll_link", "wrist_flex_link", "wrist_roll_link",
+        "gripper_link", "l_gripper_finger_link", "r_gripper_finger_link",
+        "estop_link", "laser_link",
+        "head_pan_link", "head_tilt_link",
+        "head_camera_link", "bellows_link2",
+    )
+    for link in MASSLESS_LINKS:
+        # Replace the <inertial>...</inertial> block of each named link with
+        # a tiny but well-conditioned inertial so Gazebo doesn't divide by 0.
+        pattern = rf'(<link\s+name="{link}"[^>]*>)\s*<inertial>.*?</inertial>'
+        replacement = (
+            r'\1\n    <inertial>'
+            '<mass value="0.001"/>'
+            '<inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>'
+            '</inertial>'
+        )
+        raw = re.sub(pattern, replacement, raw, flags=re.DOTALL)
 
     plugin_block = (PKG_URDF_DIR / "fetch_gazebo.xml").read_text()
     raw = re.sub(r"</robot>\s*$", plugin_block + "\n</robot>\n", raw)

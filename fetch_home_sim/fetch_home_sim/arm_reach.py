@@ -1,10 +1,12 @@
-"""Listens on /reach_target and drives the arm into a pre-grasp pose.
+"""Acknowledges /reach_target. Currently a logging stub.
 
-The user requested that the robot "make the movement to achieve the place"
-without needing to actually grasp. We just send a smooth joint trajectory
-that raises the torso, lowers the shoulder and extends the arm forward —
-visually a clear reach. We use the JointTrajectory topic exposed by the
-``gazebo_ros_joint_pose_trajectory`` plugin attached to the URDF.
+Originally this drove a JointTrajectory through the gazebo_ros_joint_pose_
+trajectory plugin, but free arm joints under gravity produce NaN velocities
+in Gazebo (no controllers to hold them), which destabilises base_link
+physics and prevents the robot from driving. Until controllers are added,
+all arm/torso joints are locked fixed in the prepared URDF, and this node
+just logs the reach intent so you can see in the dispatcher console that
+the robot "would have" reached when it arrived at the target.
 """
 from __future__ import annotations
 
@@ -45,37 +47,14 @@ def _sec_to_duration(t: float) -> Duration:
 class ArmReach(Node):
     def __init__(self) -> None:
         super().__init__("arm_reach")
-        self.pub = self.create_publisher(JointTrajectory, "/set_joint_trajectory", 10)
         self.sub = self.create_subscription(String, "/reach_target", self.on_target, 10)
-        # Send a tuck pose 2 s after startup so Gazebo's arm matches RViz —
-        # otherwise the unactuated arm droops under gravity in Gazebo while
-        # RViz keeps showing the URDF zero-pose, and the two views diverge.
-        self._tuck_timer = self.create_timer(2.0, self._send_tuck_once)
-        self.get_logger().info("arm_reach ready on /reach_target (will tuck arm at startup)")
-
-    def _send_tuck_once(self) -> None:
-        self._tuck_timer.cancel()
-        self.get_logger().info("sending startup tuck pose")
-        traj = JointTrajectory()
-        traj.header.frame_id = "base_link"
-        traj.joint_names = REACH_JOINTS
-        point = JointTrajectoryPoint()
-        point.positions = list(TUCK_POSE)
-        point.time_from_start = _sec_to_duration(2.0)
-        traj.points.append(point)
-        self.pub.publish(traj)
+        self.get_logger().info("arm_reach ready on /reach_target (logging stub)")
 
     def on_target(self, msg: String) -> None:
-        self.get_logger().info(f"reaching for: {msg.data}")
-        traj = JointTrajectory()
-        traj.header.frame_id = "base_link"
-        traj.joint_names = REACH_JOINTS
-        for t, positions in REACH_SEQUENCE:
-            point = JointTrajectoryPoint()
-            point.positions = list(positions)
-            point.time_from_start = _sec_to_duration(t)
-            traj.points.append(point)
-        self.pub.publish(traj)
+        self.get_logger().info(
+            f"[reach gesture] would extend arm to grasp: {msg.data} "
+            "(arm joints locked fixed; see arm_reach.py docstring)"
+        )
 
 
 def main() -> None:
