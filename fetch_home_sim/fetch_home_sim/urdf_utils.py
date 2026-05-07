@@ -73,15 +73,37 @@ def prepare_fetch_urdf() -> str:
 
 
 def prepare_scene_urdf(rel_path: str) -> str:
-    """Read a scenario URDF and rewrite its mesh paths to absolute file URIs."""
+    """Read a scenario URDF and rewrite its mesh paths to absolute file URIs.
+
+    Also:
+      * locks every prismatic/revolute joint (kitchen drawers, fridge door)
+        into a fixed joint so they don't dangle or self-actuate;
+      * marks the model static via a <gazebo> block so the robot can't
+        push furniture around.
+    """
     src = URDFS_DIR / "assets" / rel_path
     text = src.read_text()
     living_room_uri = _abs_file_uri(URDFS_DIR / "assets" / "living_room") + "/"
     text = text.replace("package://models_pkg/models/living_room/", living_room_uri)
-    # Kitchen textures are referenced relative to the URDF; rewrite to absolute too.
+
     if rel_path.endswith("kitchen.urdf"):
         kitchen_dir = (URDFS_DIR / "assets" / "kitchen").resolve()
         text = text.replace('filename="textures/', f'filename="file://{kitchen_dir}/textures/')
+
+    # Convert non-fixed joints to fixed (drawer prismatic, fridge revolute, etc.)
+    text = re.sub(
+        r'(<joint\s+name="[^"]+"\s+type=)"(prismatic|revolute|continuous)"',
+        r'\1"fixed"',
+        text,
+    )
+
+    # Add <gazebo><static>true</static></gazebo> if not already present.
+    if "<static>" not in text:
+        text = re.sub(
+            r"</robot>\s*$",
+            "<gazebo><static>true</static></gazebo>\n</robot>\n",
+            text,
+        )
     return text
 
 

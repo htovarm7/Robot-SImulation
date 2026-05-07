@@ -21,13 +21,21 @@ from launch_ros.actions import Node
 
 
 # Static scenario items: name → (urdf_key, x, y, z, yaw)
+#
+# Coordinate system: kitchen occupies y ∈ [0.75, 7], living room y ∈ [-7, -0.75].
+# The doorway is centered at x=0. Kitchen URDF spans roughly +4.5m east and
+# +4m north of its spawn point, so we anchor it in the western part of the
+# kitchen room.
 SCENE_LAYOUT = [
-    ("kitchen_main", "kitchen", 1.6, 1.5, 0.0, 0.0),
-    ("dining_table", "table", 0.5, -1.5, 0.0, 0.0),
-    ("couch", "couch", -1.5, -3.2, 0.0, 0.0),
-    ("armchair", "armchair", -2.8, -1.4, 0.0, 1.5708),
-    ("tv_table", "tv_table", -3.5, -2.0, 0.0, 1.5708),
-    ("tv", "tv", -3.6, -2.0, 0.55, 1.5708),
+    # Kitchen: anchor at (-3, 1.0). Internal blocks reach to ~(1.5, 5).
+    ("kitchen_main", "kitchen", -3.0, 1.0, 0.0, 0.0),
+
+    # Living room (south of partition).
+    ("dining_table", "table",     -4.0, -2.5, 0.0, 0.0),
+    ("couch",        "couch",     -1.5, -6.0, 0.0, 0.0),
+    ("armchair",     "armchair",   3.0, -5.5, 0.0, 1.5708),
+    ("tv_table",     "tv_table",   5.5, -3.5, 0.0, -1.5708),
+    ("tv",           "tv",         5.5, -3.5, 0.55, -1.5708),
 ]
 
 
@@ -81,7 +89,7 @@ def _prepare_urdfs(context, *args, **kwargs):
         arguments=[
             "-entity", "fetch",
             "-topic", "robot_description",
-            "-x", "0.0", "-y", "-0.5", "-z", "0.01",
+            "-x", "0.0", "-y", "-1.5", "-z", "0.01",
             "-Y", "1.5708",
         ],
     )
