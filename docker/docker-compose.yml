@@ -1,0 +1,26 @@
+# Alternative to run.sh — `docker compose run --rm fetch` will give you the same
+# interactive shell. Mostly here for users who prefer compose syntax.
+services:
+  fetch:
+    build:
+      context: .
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    image: fetch_home_sim:humble
+    container_name: fetch_home_sim
+    network_mode: host
+    stdin_open: true
+    tty: true
+    environment:
+      DISPLAY: "${DISPLAY}"
+      QT_X11_NO_MITSHM: "1"
+      PULSE_SERVER: "unix:/run/user/1000/pulse/native"
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${XAUTHORITY:-~/.Xauthority}:/tmp/.Xauthority:ro
+      - ../:/repo
+      - ${XDG_RUNTIME_DIR:-/run/user/1000}/pulse/native:/run/user/1000/pulse/native
+    devices:
+      - /dev/snd:/dev/snd
+    command: bash

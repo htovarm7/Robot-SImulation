@@ -87,10 +87,23 @@ Robot-SImulation/
 
 ## Install
 
+### Option A — Docker (zero setup)
+
 ```bash
-# 1. ROS 2 + Gazebo packages
+git clone <this-repo> Robot-SImulation
+cd Robot-SImulation/docker
+./run.sh
+```
+
+The script builds an image with ROS 2 Humble + Gazebo Classic + Nav2 + Whisper, sets up X11 forwarding so the Gazebo GUI displays on your host, and drops you into a shell inside the container with the workspace already built. Skip ahead to [Run](#run).
+
+### Option B — Native install on Ubuntu 22.04
+
+```bash
+# 1. ROS 2 + Gazebo + Nav2
 sudo apt install \
   ros-humble-nav2-bringup \
+  ros-humble-navigation2 \
   ros-humble-slam-toolbox \
   ros-humble-gazebo-ros-pkgs \
   ros-humble-robot-state-publisher \
@@ -98,17 +111,17 @@ sudo apt install \
   ros-humble-xacro \
   python3-colcon-common-extensions
 
-# 2. Voice deps (live mic + Whisper)
+# 2. Voice deps (only if you want mic input — text mode works without these)
 sudo apt install portaudio19-dev
 pip install --user sounddevice numpy openai-whisper
 
-# 3. Workspace + symlink this package in
+# 3. If colcon complains about --editable, pin setuptools
+pip install setuptools==58.2.0
+
+# 4. Workspace + symlink + build
 mkdir -p ~/fetch_ws/src
 ln -s ~/Desktop/Robot-SImulation/fetch_home_sim ~/fetch_ws/src/fetch_home_sim
-
-# 4. Build
-cd ~/fetch_ws
-colcon build --symlink-install
+cd ~/fetch_ws && colcon build --symlink-install
 source install/setup.bash
 
 # 5. Tell the launch files where the URDFs/meshes live
@@ -117,7 +130,7 @@ export FETCH_HOME_SIM_REPO=~/Desktop/Robot-SImulation
 
 ## Run
 
-Three terminals (each one needs `source ~/fetch_ws/install/setup.bash` and the `FETCH_HOME_SIM_REPO` export):
+Three terminals (each needs `source ~/fetch_ws/install/setup.bash` and the `FETCH_HOME_SIM_REPO` export):
 
 ```bash
 # Terminal 1 — Gazebo + robot + scene
@@ -126,8 +139,10 @@ ros2 launch fetch_home_sim simulation.launch.py
 # Terminal 2 — Nav2 with online SLAM (RViz comes up too)
 ros2 launch fetch_home_sim navigation.launch.py mode:=slam
 
-# Terminal 3 — voice listener + dispatcher + arm reach
-ros2 launch fetch_home_sim voice.launch.py whisper_model:=base.en
+# Terminal 3 — input pipeline. Pick a mode:
+ros2 launch fetch_home_sim voice.launch.py mode:=text                            # type commands
+ros2 launch fetch_home_sim voice.launch.py mode:=voice whisper_model:=base.en    # live mic + Whisper
+ros2 launch fetch_home_sim voice.launch.py mode:=none                            # publish manually
 ```
 
 Or once everything is happy, the all-in-one:
@@ -149,7 +164,20 @@ ros2 launch fetch_home_sim navigation.launch.py mode:=localization \
 
 ## Talking to the robot
 
-Speak naturally — the energy gate triggers Whisper after ~700 ms of silence; no wake word needed.
+Three input modes, picked via the `mode:=` arg on `voice.launch.py`:
+
+### Text mode (`mode:=text`)
+Type commands in the terminal — no audio stack needed. Best for first run, scripted demos, or when the mic is uncooperative.
+
+```
+> pick up the banana from the kitchen
+> go to the living room
+> stop
+> quit
+```
+
+### Voice mode (`mode:=voice`)
+Live microphone → energy gate → Whisper STT → `/spoken_command`. No wake word; Whisper fires after ~700 ms of silence.
 
 | Say | Result |
 |-----|--------|
@@ -159,7 +187,10 @@ Speak naturally — the energy gate triggers Whisper after ~700 ms of silence; n
 | *"Move to the couch"* | Navigates to the couch. |
 | *"Stop"* / *"Cancel"* | Cancels the active Nav2 goal. |
 
-If voice is fussy on your machine, publish text directly:
+Whisper model trade-offs (set via `whisper_model:=...`): `tiny.en` (39 MB, ~150 ms) → `base.en` (74 MB, ~500 ms, **default**) → `small.en` (244 MB, ~1.5 s) → `medium.en` (769 MB, GPU recommended). Larger models = better accent / noise robustness, slower CPU latency.
+
+### Manual mode (`mode:=none`)
+Skip both input nodes; publish to `/spoken_command` yourself:
 
 ```bash
 ros2 topic pub --once /spoken_command std_msgs/String \
