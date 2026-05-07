@@ -38,6 +38,10 @@ def yaw_to_quat(yaw: float) -> Quaternion:
 class AutoMapper(Node):
     def __init__(self) -> None:
         super().__init__("auto_mapper")
+        # use_sim_time MUST match Nav2 (Gazebo publishes /clock). Without it,
+        # goal headers carry wall-clock stamps and Nav2 rejects them as stale.
+        self.set_parameters([rclpy.parameter.Parameter(
+            "use_sim_time", rclpy.Parameter.Type.BOOL, True)])
         self.declare_parameter("waypoints_file", "")
         self.declare_parameter("per_goal_timeout", 60.0)
 
@@ -98,7 +102,8 @@ class AutoMapper(Node):
         goal = NavigateToPose.Goal()
         goal.pose = PoseStamped()
         goal.pose.header.frame_id = "map"
-        goal.pose.header.stamp = self.get_clock().now().to_msg()
+        # Leaving stamp at zero is treated as "use latest" by tf2 — avoids
+        # stale-stamp rejections if our clock is out of sync with Nav2's.
         goal.pose.pose.position.x = float(x)
         goal.pose.pose.position.y = float(y)
         goal.pose.pose.orientation = yaw_to_quat(float(yaw))
@@ -111,7 +116,12 @@ class AutoMapper(Node):
 
         gh = future.result()
         if not gh.accepted:
-            self.get_logger().warn("Nav2 rejected the goal")
+            self.get_logger().warn(
+                "Nav2 rejected the goal. Common causes: Nav2 not fully "
+                "active yet (wait ~10s after navigation.launch.py); planner "
+                "failed (track_unknown_space=true with empty SLAM map); "
+                "or the goal sits in a lethal cell."
+            )
             return False
 
         result_future = gh.get_result_async()

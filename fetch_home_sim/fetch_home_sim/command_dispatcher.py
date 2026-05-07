@@ -162,7 +162,8 @@ class CommandDispatcher(Node):
         goal = NavigateToPose.Goal()
         goal.pose = PoseStamped()
         goal.pose.header.frame_id = "map"
-        goal.pose.header.stamp = self.get_clock().now().to_msg()
+        # Leave stamp at zero — tf2 treats it as "latest". Wall-time stamps
+        # under sim_time get rejected as stale; this avoids that hazard.
         goal.pose.pose.position.x = float(x)
         goal.pose.pose.position.y = float(y)
         goal.pose.pose.orientation = yaw_to_quat(float(yaw))

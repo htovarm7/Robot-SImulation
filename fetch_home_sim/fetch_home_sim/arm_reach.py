@@ -15,7 +15,6 @@ from std_msgs.msg import String
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 REACH_JOINTS = [
-    "torso_lift_joint",
     "shoulder_pan_joint",
     "shoulder_lift_joint",
     "upperarm_roll_joint",
@@ -25,11 +24,14 @@ REACH_JOINTS = [
     "wrist_roll_joint",
 ]
 
-# Sequence: tuck → reach → hold. Times are seconds from start.
+TUCK_POSE = [0.0, 1.32, 0.0, -2.0, 0.0, 1.5, 0.0]
+
+# Reach sequence: ensure we start from tuck so the arm matches what RViz shows,
+# extend forward, and hold. (torso_lift_joint is locked fixed; see urdf_utils.py.)
 REACH_SEQUENCE = [
-    (1.0, [0.05, 0.0, 1.0, 0.0, -1.5, 0.0, 1.5, 0.0]),     # tuck-ish
-    (3.5, [0.30, 0.0, -0.6, 0.0, 0.4, 0.0, 0.6, 0.0]),     # extend forward
-    (5.5, [0.30, 0.0, -0.4, 0.0, 0.2, 0.0, 0.4, 0.0]),     # hold
+    (1.0, TUCK_POSE),
+    (3.5, [ 0.0, -0.6, 0.0,  0.4, 0.0, 0.6, 0.0]),
+    (5.5, [ 0.0, -0.4, 0.0,  0.2, 0.0, 0.4, 0.0]),
 ]
 
 
@@ -45,7 +47,23 @@ class ArmReach(Node):
         super().__init__("arm_reach")
         self.pub = self.create_publisher(JointTrajectory, "/set_joint_trajectory", 10)
         self.sub = self.create_subscription(String, "/reach_target", self.on_target, 10)
-        self.get_logger().info("arm_reach ready on /reach_target")
+        # Send a tuck pose 2 s after startup so Gazebo's arm matches RViz —
+        # otherwise the unactuated arm droops under gravity in Gazebo while
+        # RViz keeps showing the URDF zero-pose, and the two views diverge.
+        self._tuck_timer = self.create_timer(2.0, self._send_tuck_once)
+        self.get_logger().info("arm_reach ready on /reach_target (will tuck arm at startup)")
+
+    def _send_tuck_once(self) -> None:
+        self._tuck_timer.cancel()
+        self.get_logger().info("sending startup tuck pose")
+        traj = JointTrajectory()
+        traj.header.frame_id = "base_link"
+        traj.joint_names = REACH_JOINTS
+        point = JointTrajectoryPoint()
+        point.positions = list(TUCK_POSE)
+        point.time_from_start = _sec_to_duration(2.0)
+        traj.points.append(point)
+        self.pub.publish(traj)
 
     def on_target(self, msg: String) -> None:
         self.get_logger().info(f"reaching for: {msg.data}")

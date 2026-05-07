@@ -77,6 +77,17 @@ def prepare_fetch_urdf() -> str:
         raw,
     )
 
+    # Lock torso_lift_joint and the gripper finger joints as fixed.
+    # They're prismatic with tiny inertia and no controllers, which makes
+    # Gazebo's physics produce NaN positions → NaN TFs → Nav2 can't plan.
+    # The arm-reach demo doesn't need them.
+    for jname in ("torso_lift_joint", "l_gripper_finger_joint", "r_gripper_finger_joint"):
+        raw = re.sub(
+            rf'(<joint\s+name="{jname}"\s+type=)"(prismatic|revolute|continuous)"',
+            r'\1"fixed"',
+            raw,
+        )
+
     plugin_block = (PKG_URDF_DIR / "fetch_gazebo.xml").read_text()
     raw = re.sub(r"</robot>\s*$", plugin_block + "\n</robot>\n", raw)
     return raw
