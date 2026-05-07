@@ -1,0 +1,91 @@
+<?xml version="1.0" ?>
+<sdf version="1.7">
+  <world name="home">
+    <physics name="default" type="ode">
+      <max_step_size>0.004</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>250</real_time_update_rate>
+    </physics>
+
+    <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so">
+      <ros><namespace>/gazebo</namespace></ros>
+      <update_rate>10.0</update_rate>
+    </plugin>
+
+    <include><uri>model://sun</uri></include>
+    <include><uri>model://ground_plane</uri></include>
+
+    <!-- Soft fill light so the home is not gloomy -->
+    <light name="ceiling_light" type="point">
+      <pose>0 0 2.6 0 0 0</pose>
+      <diffuse>0.9 0.9 0.85 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <attenuation>
+        <range>20</range>
+        <linear>0.05</linear>
+        <constant>0.5</constant>
+        <quadratic>0.01</quadratic>
+      </attenuation>
+      <cast_shadows>false</cast_shadows>
+    </light>
+
+    <!-- Outer walls of the home: 8m x 8m, two rooms separated by a partition with a doorway. -->
+    <model name="home_walls">
+      <static>true</static>
+      <pose>0 0 0 0 0 0</pose>
+      <link name="walls">
+        <!-- north wall -->
+        <collision name="n_col"><pose>0 4 1.25 0 0 0</pose><geometry><box><size>8 0.1 2.5</size></box></geometry></collision>
+        <visual name="n_vis"><pose>0 4 1.25 0 0 0</pose><geometry><box><size>8 0.1 2.5</size></box></geometry><material><ambient>0.9 0.9 0.85 1</ambient><diffuse>0.9 0.9 0.85 1</diffuse></material></visual>
+        <!-- south wall -->
+        <collision name="s_col"><pose>0 -4 1.25 0 0 0</pose><geometry><box><size>8 0.1 2.5</size></box></geometry></collision>
+        <visual name="s_vis"><pose>0 -4 1.25 0 0 0</pose><geometry><box><size>8 0.1 2.5</size></box></geometry><material><ambient>0.9 0.9 0.85 1</ambient><diffuse>0.9 0.9 0.85 1</diffuse></material></visual>
+        <!-- west wall -->
+        <collision name="w_col"><pose>-4 0 1.25 0 0 0</pose><geometry><box><size>0.1 8 2.5</size></box></geometry></collision>
+        <visual name="w_vis"><pose>-4 0 1.25 0 0 0</pose><geometry><box><size>0.1 8 2.5</size></box></geometry><material><ambient>0.9 0.9 0.85 1</ambient><diffuse>0.9 0.9 0.85 1</diffuse></material></visual>
+        <!-- east wall -->
+        <collision name="e_col"><pose>4 0 1.25 0 0 0</pose><geometry><box><size>0.1 8 2.5</size></box></geometry></collision>
+        <visual name="e_vis"><pose>4 0 1.25 0 0 0</pose><geometry><box><size>0.1 8 2.5</size></box></geometry><material><ambient>0.9 0.9 0.85 1</ambient><diffuse>0.9 0.9 0.85 1</diffuse></material></visual>
+
+        <!-- partition wall between living room (south) and kitchen (north). 1.2m doorway centered at y=0. -->
+        <collision name="p_w_col"><pose>-2.4 0 1.25 0 0 0</pose><geometry><box><size>3.2 0.1 2.5</size></box></geometry></collision>
+        <visual name="p_w_vis"><pose>-2.4 0 1.25 0 0 0</pose><geometry><box><size>3.2 0.1 2.5</size></box></geometry><material><ambient>0.85 0.82 0.78 1</ambient><diffuse>0.85 0.82 0.78 1</diffuse></material></visual>
+        <collision name="p_e_col"><pose>2.4 0 1.25 0 0 0</pose><geometry><box><size>3.2 0.1 2.5</size></box></geometry></collision>
+        <visual name="p_e_vis"><pose>2.4 0 1.25 0 0 0</pose><geometry><box><size>3.2 0.1 2.5</size></box></geometry><material><ambient>0.85 0.82 0.78 1</ambient><diffuse>0.85 0.82 0.78 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- Floor texturing: a thin colored slab over the ground plane to differentiate rooms. -->
+    <model name="kitchen_floor">
+      <static>true</static>
+      <pose>0 2 0.005 0 0 0</pose>
+      <link name="l">
+        <visual name="v"><geometry><box><size>7.8 3.9 0.01</size></box></geometry><material><ambient>0.85 0.85 0.9 1</ambient><diffuse>0.85 0.85 0.9 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="living_room_floor">
+      <static>true</static>
+      <pose>0 -2 0.005 0 0 0</pose>
+      <link name="l">
+        <visual name="v"><geometry><box><size>7.8 3.9 0.01</size></box></geometry><material><ambient>0.55 0.4 0.3 1</ambient><diffuse>0.55 0.4 0.3 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- A simple banana on the kitchen counter (yellow capsule). The robot's task is to reach this. -->
+    <model name="banana">
+      <static>false</static>
+      <pose>2.0 2.5 0.95 0 1.5708 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>0.12</mass>
+          <inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>1e-4</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+        </inertial>
+        <collision name="c"><geometry><capsule><radius>0.018</radius><length>0.16</length></capsule></geometry></collision>
+        <visual name="v">
+          <geometry><capsule><radius>0.018</radius><length>0.16</length></capsule></geometry>
+          <material><ambient>0.95 0.85 0.1 1</ambient><diffuse>0.95 0.85 0.1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+  </world>
+</sdf>

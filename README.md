@@ -1,144 +1,78 @@
-# Fetch Home Simulation — Gazebo + ROS 2
+# Fetch Home Simulation — Gazebo Classic + ROS 2 Humble
 
-> **HackDays 2026 Demo** — Created by [Hector Tovar](https://github.com/htovar)
+> Created by [Hector Tovar](mailto:h.tovarm07@gmail.com)
 
-A full-stack robot simulation of a **Fetch mobile manipulator** operating inside a furnished home environment built in Gazebo. The system integrates autonomous navigation, obstacle avoidance, human-robot interaction (HRI), voice command recognition, and a Retrieval-Augmented Generation (RAG) module for natural-language Q&A.
+A Gazebo simulation of the **Fetch mobile manipulator** operating inside a furnished home. The robot listens to spoken commands like *"pick up the banana from the kitchen"*, parses the intent, plans a path with Nav2 around obstacles, drives smoothly to the target room, and performs an arm-reach gesture on arrival.
+
+The Fetch URDF and the scenario URDFs (kitchen, living room furniture) live in [urdfs/](urdfs/) and are **not modified**. The ROS 2 package in [fetch_home_sim/](fetch_home_sim/) wraps them with Gazebo plugins, navigation config, and a voice → intent → action pipeline.
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Features](#features)
-- [System Architecture](#system-architecture)
-- [Project Structure](#project-structure)
+- [What it does](#what-it-does)
+- [Stack](#stack)
+- [Repository layout](#repository-layout)
 - [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Running the Simulation](#running-the-simulation)
-- [Voice Commands](#voice-commands)
-- [RAG Question-Answering](#rag-question-answering)
-- [HRI Interface](#hri-interface)
-- [Configuration](#configuration)
-- [Troubleshooting](#troubleshooting)
+- [Install](#install)
+- [Run](#run)
+- [Talking to the robot](#talking-to-the-robot)
+- [How it fits together](#how-it-fits-together)
+- [Customizing](#customizing)
+- [Known limitations](#known-limitations)
 - [License](#license)
 
 ---
 
-## Overview
+## What it does
 
-This simulation recreates a residential interior (living room, kitchen, hallway, bedroom) populated with realistic Gazebo assets. The Fetch robot navigates the environment autonomously, reacts to humans in its field of view, listens for spoken commands, and can answer contextual questions about its surroundings or tasks using a RAG pipeline backed by a local language model.
+- **Home environment** — outer walls + partition with a doorway between a kitchen and living room, your URDF furniture (couch, armchair, dining table, TV + TV table, kitchen counter) spawned in place, and a banana on the kitchen counter.
+- **Autonomous navigation** — Nav2 with DWB local planner, voxel + inflation costmaps from the Fetch's 2-D laser, online SLAM (slam_toolbox) so no prebuilt map is required.
+- **Smooth motion + obstacle avoidance** — capped at 0.45 m/s with 0.55 m inflation radius around the 0.30 m robot footprint; recoveries (spin / back-up / wait) on stuck detection.
+- **Voice commands** — always-on microphone with an energy gate, transcribed locally with OpenAI Whisper, published as plain text on `/spoken_command`.
+- **Intent dispatch** — small regex parser maps utterances to a Nav2 `NavigateToPose` goal at a named waypoint, plus an arm-reach gesture when the intent is *"pick up X"*. As specified, the robot does **not** actually grasp — it drives to the place and performs the reach motion.
 
-| Component | Technology |
-|-----------|-----------|
-| Simulator | Gazebo Harmonic / Classic 11 |
+## Stack
+
+| Component | Choice |
+|-----------|--------|
+| Simulator | Gazebo Classic 11 |
 | Middleware | ROS 2 Humble |
-| Navigation | Nav2 (AMCL + SLAM Toolbox) |
-| Obstacle avoidance | DWB local planner + costmap layers |
-| HRI | OpenCV face detection, TF-based proximity manager |
-| Voice commands | Whisper (OpenAI) + Piper TTS |
-| RAG pipeline | LangChain + ChromaDB + Ollama (Llama 3) |
-| Robot model | Fetch Robotics URDF / `fetch_ros` |
+| Navigation | Nav2 (DWB + voxel costmap) |
+| Mapping | slam_toolbox (online async) |
+| Speech-to-text | OpenAI Whisper (local, CPU or GPU) |
+| Audio capture | sounddevice + numpy |
+| Robot model | Fetch Robotics URDF (lightly modified — see [urdfs/fetch/robots/FETCH_MODIFICATIONS.md](urdfs/fetch/robots/FETCH_MODIFICATIONS.md)) |
 
----
-
-## Features
-
-### Autonomous Navigation
-- SLAM-based map building with SLAM Toolbox
-- AMCL for localization on pre-built maps
-- Nav2 goal sending via CLI, RViz2 interactive markers, or voice
-- Dynamic re-planning around moving obstacles
-
-### Obstacle Avoidance
-- 3-D costmap inflated from LiDAR and RGBD point cloud
-- Recovery behaviours: in-place spin, back-up, clear costmap
-- Person-aware costmap layer that inflates around detected humans
-
-### Human-Robot Interaction (HRI)
-- Face and body detection via the robot's RGB-D camera
-- Proximity zones: Fetch stops and acknowledges humans within 1.5 m
-- Gaze-tracking: robot head follows the nearest detected person
-- Social navigation: planner biases paths away from human standing areas
-
-### Voice Commands
-- Always-on wake-word detection (`hey fetch`)
-- Whisper STT transcription (runs locally on CPU or GPU)
-- Intent parser maps utterances to Nav2 goals, manipulation tasks, or RAG queries
-- Piper TTS provides spoken responses through the robot's speaker topic
-
-### RAG Q&A System
-- Knowledge base built from room descriptions, object manifests, and task logs
-- LangChain retrieval chain over ChromaDB vector store
-- Ollama serves the local LLM (default: `llama3.2:3b` for low-resource machines)
-- Answers streamed back as TTS output and logged to `~/fetch_logs/`
-
----
-
-## System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Gazebo Simulation                        │
-│   Home World ──► Fetch URDF ──► Sensor plugins (LiDAR, RGBD)   │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │ ROS 2 topics / TF
-        ┌───────────────────┼───────────────────────┐
-        ▼                   ▼                       ▼
-  ┌──────────┐       ┌────────────┐          ┌──────────────┐
-  │  Nav2    │       │    HRI     │          │ Voice / RAG  │
-  │  Stack   │       │  Manager   │          │  Pipeline    │
-  │ (AMCL +  │◄─────►│ (OpenCV + │          │ (Whisper +   │
-  │  DWB)    │       │  TF zones) │          │  LangChain)  │
-  └──────────┘       └────────────┘          └──────┬───────┘
-        ▲                   ▲                       │
-        └───────────────────┴───────────────────────┘
-                    /fetch/cmd_vel, /tf, /joy …
-```
-
----
-
-## Project Structure
+## Repository layout
 
 ```
 Robot-SImulation/
-├── fetch_home_sim/              # Main ROS 2 package
-│   ├── launch/
-│   │   ├── simulation.launch.py       # Gazebo + robot_state_publisher
-│   │   ├── navigation.launch.py       # Nav2 full stack
-│   │   ├── hri.launch.py              # Face detection + proximity manager
-│   │   └── voice_rag.launch.py        # Whisper + TTS + RAG node
+├── urdfs/
+│   ├── fetch/                          # Fetch URDF + meshes (unmodified)
+│   └── assets/                         # Kitchen + living-room URDFs and meshes
+│       ├── kitchen/
+│       └── living_room/
+├── fetch_home_sim/                     # ROS 2 package (ament_python)
+│   ├── worlds/home.world               # walls, floors, partition, banana
+│   ├── urdf/fetch_gazebo.xml           # Gazebo plugin block spliced into fetch.urdf
 │   ├── config/
-│   │   ├── nav2_params.yaml
-│   │   ├── slam_toolbox_params.yaml
-│   │   └── rag_config.yaml
-│   ├── worlds/
-│   │   ├── home.world                 # Full home SDF world
-│   │   └── assets/                    # Meshes, textures, model SDFs
-│   │       ├── furniture/
-│   │       ├── appliances/
-│   │       └── decorations/
-│   ├── maps/
-│   │   └── home_map.pgm / .yaml       # Pre-built map for localization
-│   ├── fetch_home_sim/
-│   │   ├── hri_manager.py
-│   │   ├── voice_interface.py
-│   │   └── rag_node.py
-│   ├── rag/
-│   │   ├── knowledge_base/            # Markdown docs ingested into ChromaDB
-│   │   ├── ingest.py                  # Builds / updates the vector store
-│   │   └── query.py                   # Standalone RAG query tool
-│   ├── package.xml
-│   ├── setup.py
-│   └── CMakeLists.txt
-├── docker/
-│   ├── Dockerfile
-│   └── docker-compose.yml
-├── docs/
-│   └── architecture.png
+│   │   ├── nav2_params.yaml            # Nav2 + DWB + costmaps
+│   │   ├── slam_toolbox_params.yaml    # online SLAM
+│   │   └── waypoints.yaml              # named places + object→place table
+│   ├── launch/
+│   │   ├── simulation.launch.py        # Gazebo + Fetch + scene URDFs
+│   │   ├── navigation.launch.py        # Nav2 (slam | localization)
+│   │   ├── voice.launch.py             # mic + dispatcher + arm_reach
+│   │   └── bringup.launch.py           # all of the above
+│   └── fetch_home_sim/
+│       ├── urdf_utils.py               # rewrites package:// → file://, adds plugins
+│       ├── voice_listener.py           # sounddevice + Whisper → /spoken_command
+│       ├── command_dispatcher.py       # intent parser → NavigateToPose
+│       └── arm_reach.py                # /reach_target → JointTrajectory
+├── fetch_home_sim/QUICKSTART.md        # short version of these run instructions
 └── README.md
 ```
-
----
 
 ## Prerequisites
 
@@ -146,238 +80,167 @@ Robot-SImulation/
 |-------------|---------|
 | Ubuntu | 22.04 LTS |
 | ROS 2 | Humble Hawksbill |
-| Gazebo | Classic 11 **or** Harmonic (via `ros_gz`) |
+| Gazebo | Classic 11 |
 | Python | ≥ 3.10 |
-| CUDA (optional) | ≥ 11.8 (speeds up Whisper) |
-| Ollama | ≥ 0.3 |
-| RAM | ≥ 16 GB recommended |
+| RAM | 8 GB minimum, 16 GB recommended |
+| GPU (optional) | speeds up Whisper transcription |
 
-### ROS 2 packages
+## Install
 
 ```bash
+# 1. ROS 2 + Gazebo packages
 sudo apt install \
   ros-humble-nav2-bringup \
   ros-humble-slam-toolbox \
   ros-humble-gazebo-ros-pkgs \
   ros-humble-robot-state-publisher \
   ros-humble-rviz2 \
-  ros-humble-tf2-tools \
-  ros-humble-image-transport
-```
+  ros-humble-xacro \
+  python3-colcon-common-extensions
 
-### Python dependencies
+# 2. Voice deps (live mic + Whisper)
+sudo apt install portaudio19-dev
+pip install --user sounddevice numpy openai-whisper
 
-```bash
-pip install \
-  openai-whisper \
-  piper-tts \
-  langchain \
-  langchain-community \
-  chromadb \
-  ollama \
-  opencv-python \
-  numpy \
-  sounddevice \
-  pvporcupine        # wake-word engine
-```
+# 3. Workspace + symlink this package in
+mkdir -p ~/fetch_ws/src
+ln -s ~/Desktop/Robot-SImulation/fetch_home_sim ~/fetch_ws/src/fetch_home_sim
 
----
-
-## Installation
-
-```bash
-# 1. Create a ROS 2 workspace
-mkdir -p ~/fetch_ws/src && cd ~/fetch_ws/src
-
-# 2. Clone this repository
-git clone https://github.com/<your-org>/Robot-SImulation.git
-
-# 3. Clone Fetch robot description
-git clone https://github.com/fetchrobotics/fetch_ros.git -b ros2
-
-# 4. Install rosdep dependencies
+# 4. Build
 cd ~/fetch_ws
-rosdep install --from-paths src --ignore-src -r -y
-
-# 5. Build
 colcon build --symlink-install
 source install/setup.bash
 
-# 6. Pull the local LLM
-ollama pull llama3.2:3b
-
-# 7. Ingest the knowledge base into ChromaDB
-python src/Robot-SImulation/fetch_home_sim/rag/ingest.py
+# 5. Tell the launch files where the URDFs/meshes live
+export FETCH_HOME_SIM_REPO=~/Desktop/Robot-SImulation
 ```
 
----
+## Run
 
-## Running the Simulation
-
-### Option A — All-in-one launch
+Three terminals (each one needs `source ~/fetch_ws/install/setup.bash` and the `FETCH_HOME_SIM_REPO` export):
 
 ```bash
-# Terminal 1: Gazebo + robot
+# Terminal 1 — Gazebo + robot + scene
 ros2 launch fetch_home_sim simulation.launch.py
 
-# Terminal 2: Nav2 navigation stack
-ros2 launch fetch_home_sim navigation.launch.py
-
-# Terminal 3: HRI manager
-ros2 launch fetch_home_sim hri.launch.py
-
-# Terminal 4: Voice + RAG pipeline
-ros2 launch fetch_home_sim voice_rag.launch.py
-```
-
-### Option B — Docker Compose
-
-```bash
-cd docker/
-docker compose up
-```
-
-### Sending a navigation goal manually
-
-```bash
-ros2 topic pub /goal_pose geometry_msgs/PoseStamped \
-  "{ header: { frame_id: 'map' },
-     pose: { position: { x: 2.5, y: -1.0, z: 0.0 },
-             orientation: { w: 1.0 } } }" --once
-```
-
-### SLAM mapping mode
-
-```bash
+# Terminal 2 — Nav2 with online SLAM (RViz comes up too)
 ros2 launch fetch_home_sim navigation.launch.py mode:=slam
+
+# Terminal 3 — voice listener + dispatcher + arm reach
+ros2 launch fetch_home_sim voice.launch.py whisper_model:=base.en
 ```
 
-Save the map after exploration:
+Or once everything is happy, the all-in-one:
 
 ```bash
-ros2 run nav2_map_server map_saver_cli -f ~/fetch_ws/src/Robot-SImulation/fetch_home_sim/maps/home_map
+ros2 launch fetch_home_sim bringup.launch.py
 ```
 
----
-
-## Voice Commands
-
-After launch, say **"Hey Fetch"** to activate the listening window (3 s).
-
-| Utterance | Action |
-|-----------|--------|
-| `"Go to the kitchen"` | Nav2 goal → named waypoint `kitchen` |
-| `"Go to the living room"` | Nav2 goal → named waypoint `living_room` |
-| `"Follow me"` | Activates person-following behaviour |
-| `"Stop"` | Cancels active Nav2 goal |
-| `"Come here"` | Robot navigates to the speaker's last-seen position |
-| `"What is in front of you?"` | Triggers RAG query with current camera context |
-| `"Tell me about the bedroom"` | RAG Q&A over knowledge base |
-
-Custom waypoints can be added in `config/nav2_params.yaml` under `waypoints`.
-
----
-
-## RAG Question-Answering
-
-The RAG module uses a two-stage pipeline:
-
-1. **Retrieval** — the user's question is embedded and the top-k most relevant chunks are retrieved from ChromaDB (knowledge base covers room layouts, object locations, robot capabilities, and task history).
-2. **Generation** — the retrieved context + question are sent to the local Ollama LLM which generates a grounded answer.
-
-### Standalone query (no voice)
+### Localization mode (with a saved map)
 
 ```bash
-python fetch_home_sim/rag/query.py --question "Where is the coffee machine?"
+# Drive around manually first to map, then save:
+ros2 run nav2_map_server map_saver_cli -f ~/fetch_ws/src/fetch_home_sim/maps/home_map
+
+# Re-run with the saved map instead of SLAM:
+ros2 launch fetch_home_sim navigation.launch.py mode:=localization \
+  map:=$HOME/fetch_ws/src/fetch_home_sim/maps/home_map.yaml
 ```
 
-### Adding documents to the knowledge base
+## Talking to the robot
 
-Drop any `.txt` or `.md` file into `rag/knowledge_base/` and re-run ingest:
+Speak naturally — the energy gate triggers Whisper after ~700 ms of silence; no wake word needed.
+
+| Say | Result |
+|-----|--------|
+| *"Pick up the banana from the kitchen"* | Drives to the `kitchen` waypoint, performs a pre-grasp arm reach. |
+| *"Fetch the spoon"* | Object word implies the kitchen, navigates there + reaches. |
+| *"Go to the living room"* | Navigates to the `living_room` waypoint. |
+| *"Move to the couch"* | Navigates to the couch. |
+| *"Stop"* / *"Cancel"* | Cancels the active Nav2 goal. |
+
+If voice is fussy on your machine, publish text directly:
 
 ```bash
-python fetch_home_sim/rag/ingest.py --incremental
+ros2 topic pub --once /spoken_command std_msgs/String \
+  "{data: 'pick up the banana from the kitchen'}"
 ```
 
----
+## How it fits together
 
-## HRI Interface
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       Gazebo Classic 11                         │
+│  home.world  ──►  Fetch URDF + plugins  ──►  /scan /odom /tf   │
+│                   Static scene URDFs                            │
+└─────────────────────┬───────────────────────────────────────────┘
+                      │ ROS 2 topics
+        ┌─────────────┼─────────────────────────┐
+        ▼             ▼                         ▼
+   ┌─────────┐   ┌──────────┐           ┌───────────────┐
+   │  Nav2   │   │ slam_    │           │ voice_listener│ mic
+   │ (DWB +  │◄──┤ toolbox  │           │   (Whisper)   │◄────
+   │ costmap)│   │  /map    │           └──────┬────────┘
+   └────┬────┘   └──────────┘                  │ /spoken_command
+        ▲                                      ▼
+        │                              ┌───────────────────┐
+        │      NavigateToPose          │ command_dispatcher│
+        └──────────────────────────────┤ (intent parsing)  │
+                                       └───────┬───────────┘
+                                               │ /reach_target
+                                               ▼
+                                       ┌───────────────────┐
+                                       │    arm_reach      │
+                                       │ JointTrajectory   │
+                                       └───────────────────┘
+```
 
-The `hri_manager` node subscribes to `/camera/color/image_raw` and `/camera/depth/image_rect_raw` and publishes:
+`urdf_utils.py` runs at launch time:
+1. Reads [urdfs/fetch/robots/fetch.urdf](urdfs/fetch/robots/fetch.urdf) and rewrites `package://fetch_description/meshes/...` to absolute `file://` paths so meshes load without a wrapper package.
+2. Splices [fetch_home_sim/urdf/fetch_gazebo.xml](fetch_home_sim/urdf/fetch_gazebo.xml) (diff drive, laser, RGBD camera, joint state, joint pose trajectory plugins) before `</robot>`.
+3. Does the same `package://` → `file://` rewrite for the scenario URDFs in [urdfs/assets/](urdfs/assets/).
 
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/hri/persons_detected` | `std_msgs/Int32` | Number of people in frame |
-| `/hri/nearest_person_distance` | `std_msgs/Float32` | Distance in metres |
-| `/hri/social_costmap_update` | `nav2_msgs/Costmap` | Extra inflation around humans |
+The prepared URDFs are written to `/tmp/fetch_home_sim_urdf/` and spawned by `gazebo_ros::spawn_entity.py`.
 
-Behaviour zones (configurable in `config/nav2_params.yaml`):
+## Customizing
 
-- **> 3 m** — normal operation
-- **1.5 – 3 m** — reduced speed (0.3 m/s max)
-- **< 1.5 m** — full stop, verbal acknowledgement via TTS
+### Add a new waypoint or object
 
----
+Edit [fetch_home_sim/config/waypoints.yaml](fetch_home_sim/config/waypoints.yaml):
 
-## Configuration
-
-All tunable parameters live in `fetch_home_sim/config/`:
-
-### `nav2_params.yaml` (selection)
 ```yaml
-controller_server:
-  ros__parameters:
-    FollowPath:
-      max_vel_x: 0.5
-      min_vel_x: -0.25
-      max_vel_theta: 1.0
+waypoints:
+  bedroom:
+    x: 3.5
+    y: -3.0
+    yaw: 1.5708
+objects:
+  pillow: bedroom
 ```
 
-### `rag_config.yaml`
-```yaml
-rag:
-  model: "llama3.2:3b"       # Ollama model tag
-  embedding_model: "nomic-embed-text"
-  top_k: 4
-  chunk_size: 512
-  chunk_overlap: 64
-  chroma_persist_dir: "~/.fetch_chroma"
-```
+Now *"go to the bedroom"* and *"fetch the pillow"* both work — no code change.
 
-### `slam_toolbox_params.yaml`
-```yaml
-slam_toolbox:
-  ros__parameters:
-    mode: localization           # or 'mapping'
-    map_file_name: "home_map"
-```
+### Add furniture
 
----
+Drop a URDF into [urdfs/assets/](urdfs/assets/), add it to the `SCENE_LAYOUT` list and the prepared-URDF map in [fetch_home_sim/launch/simulation.launch.py](fetch_home_sim/launch/simulation.launch.py) and [fetch_home_sim/fetch_home_sim/urdf_utils.py](fetch_home_sim/fetch_home_sim/urdf_utils.py).
 
-## Troubleshooting
+### Tune motion
 
-| Symptom | Likely cause | Fix |
-|---------|-------------|-----|
-| Gazebo opens but robot not visible | Missing Fetch meshes | Re-run `rosdep install` and rebuild |
-| Nav2 fails to initialise | Map not found | Check path in `nav2_params.yaml` → `yaml_filename` |
-| Whisper not transcribing | No microphone detected | `arecord -l` to list devices; set `sounddevice` index in `voice_interface.py` |
-| Ollama timeout | Model not pulled | `ollama pull llama3.2:3b` |
-| ChromaDB empty | Ingest not run | `python rag/ingest.py` |
-| Robot oscillates near goals | DWB tolerance too tight | Increase `xy_goal_tolerance` in `nav2_params.yaml` |
+Speed, acceleration, footprint and inflation are in [fetch_home_sim/config/nav2_params.yaml](fetch_home_sim/config/nav2_params.yaml). Defaults: `max_vel_x: 0.45`, `acc_lim_x: 1.0`, `inflation_radius: 0.55`, `robot_radius: 0.30`.
 
----
+## Known limitations
+
+- The Fetch URDF carries no `<transmission>` elements — arm motion is driven through the `gazebo_ros_joint_pose_trajectory` plugin (kinematic, not ros2_control). Good enough for a visual reach demo, not for precise manipulation or grasping.
+- Online SLAM means the global costmap is empty until the robot has driven around. Either drive manually first via the RViz "Nav2 Goal" tool, or save a map and switch to `mode:=localization`.
+- The banana is a yellow capsule placeholder — the [urdfs/assets/](urdfs/assets/) folder ships utensils (fork, spoon, knife, bowl) but no banana mesh. Drop one in and edit `home.world` to upgrade.
+- Gazebo Classic is EOL upstream; the plugin layer in `urdf/fetch_gazebo.xml` will need rewriting for Gazebo Harmonic (`ros_gz_*` packages) when you migrate.
 
 ## Author
 
 **Hector Tovar** — [h.tovarm07@gmail.com](mailto:h.tovarm07@gmail.com)
 
-Built as a live demo for **HackDays 2026**, showcasing how open-source robotics stacks (ROS 2, Nav2, Gazebo) can be combined with modern AI tooling (Whisper, RAG, local LLMs) to produce an interactive home robot in simulation.
-
----
-
 ## License
 
 This project is released under the [Apache 2.0 License](LICENSE).
 
-The Fetch robot model is © Fetch Robotics and distributed under BSD-3-Clause.
-Gazebo assets sourced from the Open-Source Robotics Foundation model database are distributed under their respective licenses (see `worlds/assets/LICENSES`).
+The Fetch robot model is © Fetch Robotics and distributed under BSD-3-Clause. Scenario meshes retain their original licenses (see [urdfs/](urdfs/)).

@@ -1,0 +1,41 @@
+# Named waypoints in the map frame. The command_dispatcher resolves
+# location words ("kitchen", "living room", ...) to one of these poses.
+waypoints:
+  kitchen:
+    x: 1.6
+    y: 2.0
+    yaw: 1.5708    # facing the counter (north)
+  living_room:
+    x: -1.5
+    y: -2.0
+    yaw: 0.0
+  couch:
+    x: -1.5
+    y: -2.6
+    yaw: 1.5708
+  tv:
+    x: -2.5
+    y: -2.0
+    yaw: 0.0
+  dining_table:
+    x: 0.5
+    y: -1.2
+    yaw: 1.5708
+  home:
+    x: 0.0
+    y: -0.5
+    yaw: 1.5708
+
+# Object → waypoint association used by intent parsing.
+# "pick up the banana" → go to "kitchen"; "sit on the couch" → "couch".
+objects:
+  banana: kitchen
+  apple: kitchen
+  cup: kitchen
+  bowl: kitchen
+  spoon: kitchen
+  fork: kitchen
+  knife: kitchen
+  newspaper: living_room
+  remote: tv
+  book: living_room
