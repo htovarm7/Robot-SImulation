@@ -27,6 +27,7 @@ setup(
     entry_points={
         'console_scripts': [
             'voice_listener = fetch_home_sim.voice_listener:main',
+            'text_input = fetch_home_sim.text_input:main',
             'command_dispatcher = fetch_home_sim.command_dispatcher:main',
             'arm_reach = fetch_home_sim.arm_reach:main',
         ],
