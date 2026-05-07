@@ -57,6 +57,16 @@ def prepare_fetch_urdf() -> str:
     meshes_uri = _abs_file_uri(URDFS_DIR / "fetch" / "meshes") + "/"
     raw = raw.replace("package://fetch_description/meshes/", meshes_uri)
 
+    # Strip the legacy <sensor:camera> block — uses an undefined XML namespace
+    # prefix from Gazebo Classic 1.x, which the URDF parser rejects. We replace
+    # it with a modern camera plugin via fetch_gazebo.xml.
+    raw = re.sub(
+        r'<gazebo reference="head_camera_rgb_optical_frame">.*?</gazebo>',
+        "",
+        raw,
+        flags=re.DOTALL,
+    )
+
     plugin_block = (PKG_URDF_DIR / "fetch_gazebo.xml").read_text()
     raw = re.sub(r"</robot>\s*$", plugin_block + "\n</robot>\n", raw)
     return raw

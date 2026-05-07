@@ -80,9 +80,9 @@
           <mass>0.12</mass>
           <inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>1e-4</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
-        <collision name="c"><geometry><capsule><radius>0.018</radius><length>0.16</length></capsule></geometry></collision>
+        <collision name="c"><geometry><cylinder><radius>0.018</radius><length>0.16</length></cylinder></geometry></collision>
         <visual name="v">
-          <geometry><capsule><radius>0.018</radius><length>0.16</length></capsule></geometry>
+          <geometry><cylinder><radius>0.018</radius><length>0.16</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.1 1</ambient><diffuse>0.95 0.85 0.1 1</diffuse></material>
         </visual>
       </link>
