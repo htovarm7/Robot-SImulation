@@ -34,17 +34,19 @@ waypoints:
 # the laser sweeps the whole house, then returns to "home". Tune to taste —
 # more points = denser map, longer startup.
 exploration:
-  - { x:  0.0, y:  1.0, yaw:  1.5708 }   # just inside the kitchen doorway
+  # --- Living room first (same room as spawn, no wall crossing needed) ---
+  - { x:  0.0, y: -2.5, yaw:  0.0    }   # center of living room
+  - { x: -4.0, y: -2.5, yaw:  3.1416 }   # dining table area
+  - { x: -4.0, y: -5.5, yaw:  0.0    }   # SW corner
+  - { x:  2.0, y: -5.5, yaw:  0.0    }   # SE corner
+  - { x:  4.5, y: -3.5, yaw:  1.5708 }   # TV area
+  - { x:  0.0, y: -1.2, yaw:  1.5708 }   # doorway approach, facing kitchen
+  # --- Cross into kitchen ---
+  - { x:  0.0, y:  1.0, yaw:  1.5708 }   # just inside kitchen
   - { x: -3.0, y:  3.0, yaw:  1.5708 }   # west side of kitchen
   - { x: -3.0, y:  5.5, yaw:  0.0    }   # NW corner
   - { x:  2.5, y:  5.5, yaw: -1.5708 }   # NE corner
-  - { x:  3.0, y:  3.0, yaw: -1.5708 }   # east side of kitchen
-  - { x:  0.0, y:  1.0, yaw: -1.5708 }   # back to doorway
-  - { x: -4.0, y: -2.5, yaw:  3.1416 }   # dining table area
-  - { x: -4.0, y: -5.5, yaw:  0.0    }   # SW corner of living room
-  - { x:  2.0, y: -5.5, yaw:  0.0    }   # SE corner
-  - { x:  4.5, y: -3.5, yaw:  1.5708 }   # in front of TV
-  - { x:  0.0, y: -1.5, yaw:  1.5708 }   # back home, facing kitchen
+  - { x:  0.0, y: -1.5, yaw:  1.5708 }   # back home
 
 objects:
   banana: kitchen

@@ -52,11 +52,13 @@
         <collision name="e_col"><pose>7 0 1.25 0 0 0</pose><geometry><box><size>0.1 14 2.5</size></box></geometry></collision>
         <visual name="e_vis"><pose>7 0 1.25 0 0 0</pose><geometry><box><size>0.1 14 2.5</size></box></geometry><material><ambient>0.92 0.90 0.84 1</ambient><diffuse>0.92 0.90 0.84 1</diffuse></material></visual>
 
-        <!-- partition between kitchen (y>0) and living room (y<0); 1.5m doorway centered at x=0 -->
-        <collision name="p_w_col"><pose>-3.875 0 1.25 0 0 0</pose><geometry><box><size>6.25 0.1 2.5</size></box></geometry></collision>
-        <visual name="p_w_vis"><pose>-3.875 0 1.25 0 0 0</pose><geometry><box><size>6.25 0.1 2.5</size></box></geometry><material><ambient>0.85 0.82 0.78 1</ambient><diffuse>0.85 0.82 0.78 1</diffuse></material></visual>
-        <collision name="p_e_col"><pose>3.875 0 1.25 0 0 0</pose><geometry><box><size>6.25 0.1 2.5</size></box></geometry></collision>
-        <visual name="p_e_vis"><pose>3.875 0 1.25 0 0 0</pose><geometry><box><size>6.25 0.1 2.5</size></box></geometry><material><ambient>0.85 0.82 0.78 1</ambient><diffuse>0.85 0.82 0.78 1</diffuse></material></visual>
+        <!-- partition between kitchen (y>0) and living room (y<0).
+             Doorway is 2.0m wide (±1.0 m from centre) so the inflated
+             robot footprint (0.30 + 0.35 = 0.65 m) fits with margin. -->
+        <collision name="p_w_col"><pose>-4.0 0 1.25 0 0 0</pose><geometry><box><size>6.0 0.1 2.5</size></box></geometry></collision>
+        <visual name="p_w_vis"><pose>-4.0 0 1.25 0 0 0</pose><geometry><box><size>6.0 0.1 2.5</size></box></geometry><material><ambient>0.85 0.82 0.78 1</ambient><diffuse>0.85 0.82 0.78 1</diffuse></material></visual>
+        <collision name="p_e_col"><pose>4.0 0 1.25 0 0 0</pose><geometry><box><size>6.0 0.1 2.5</size></box></geometry></collision>
+        <visual name="p_e_vis"><pose>4.0 0 1.25 0 0 0</pose><geometry><box><size>6.0 0.1 2.5</size></box></geometry><material><ambient>0.85 0.82 0.78 1</ambient><diffuse>0.85 0.82 0.78 1</diffuse></material></visual>
       </link>
     </model>
 

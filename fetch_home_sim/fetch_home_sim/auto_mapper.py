@@ -22,6 +22,7 @@ import yaml
 from action_msgs.msg import GoalStatus
 from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import PoseStamped, Quaternion
+from nav_msgs.msg import OccupancyGrid
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from nav2_msgs.action import NavigateToPose
@@ -65,10 +66,23 @@ class AutoMapper(Node):
         self.client = ActionClient(self, NavigateToPose, "/navigate_to_pose")
         self.status_pub = self.create_publisher(String, "/dispatcher_status", 10)
 
+        self._map_ready = False
+        self._map_sub = self.create_subscription(
+            OccupancyGrid, "/map", self._on_map, 1)
+
         self.get_logger().info(
             f"AutoMapper loaded {len(self.poses)} exploration poses. "
             f"Per-goal timeout = {self.timeout:.0f}s."
         )
+
+    def _on_map(self, msg: OccupancyGrid) -> None:
+        free = sum(1 for c in msg.data if c == 0)
+        if free > 200 and not self._map_ready:
+            self._map_ready = True
+            self.get_logger().info(
+                f"Map ready: {msg.info.width}x{msg.info.height} cells, "
+                f"{free} free. Starting tour."
+            )
 
     # ------------------------------------------------------------------
     # Public driver
@@ -78,6 +92,19 @@ class AutoMapper(Node):
         if not self.client.wait_for_server(timeout_sec=15.0):
             self.get_logger().error("Nav2 action server not available — is navigation.launch.py up?")
             return False
+
+        self.get_logger().info("waiting for SLAM map to populate (need >200 free cells)...")
+        deadline = time.time() + 30.0
+        while not self._map_ready and time.time() < deadline and rclpy.ok():
+            rclpy.spin_once(self, timeout_sec=0.5)
+        if not self._map_ready:
+            self.get_logger().warn("Map did not populate in 30s — starting anyway.")
+        else:
+            # Give nav2 costmap a moment to receive the map from slam_toolbox
+            self.get_logger().info("Map received. Waiting 3s for costmap to update...")
+            deadline2 = time.time() + 3.0
+            while time.time() < deadline2 and rclpy.ok():
+                rclpy.spin_once(self, timeout_sec=0.1)
 
         for i, p in enumerate(self.poses, 1):
             self._announce(

@@ -10,9 +10,6 @@
     <right_joint>r_wheel_joint</right_joint>
     <wheel_separation>0.37476</wheel_separation>
     <wheel_diameter>0.13</wheel_diameter>
-    <!-- Plenty of torque to overcome static friction on a 70 kg robot.
-         Acceleration kept moderate so the chassis doesn't oscillate on
-         its sphere wheels (Segway-style). -->
     <max_wheel_torque>200.0</max_wheel_torque>
     <max_wheel_acceleration>1.0</max_wheel_acceleration>
     <command_topic>cmd_vel</command_topic>
@@ -22,7 +19,9 @@
     <odometry_topic>odom</odometry_topic>
     <odometry_frame>odom</odometry_frame>
     <robot_base_frame>base_link</robot_base_frame>
-    <odometry_source>1</odometry_source>
+    <!-- World-pose odometry: reads the robot's actual Gazebo pose instead
+         of integrating wheel encoders. More reliable when wheels may slip. -->
+    <odometry_source>0</odometry_source>
   </plugin>
 
   <plugin name="gazebo_ros_joint_state_publisher" filename="libgazebo_ros_joint_state_publisher.so">
@@ -31,22 +30,17 @@
       <remapping>~/out:=joint_states</remapping>
     </ros>
     <update_rate>30</update_rate>
-    <!-- All arm/torso/gripper joints are locked fixed in urdf_utils.py
-         (free joints without controllers produce NaN under gravity and
-         break base_link physics). Only head joints remain commandable. -->
     <joint_name>head_pan_joint</joint_name>
     <joint_name>head_tilt_joint</joint_name>
   </plugin>
 
   <plugin name="gazebo_ros_joint_pose_trajectory" filename="libgazebo_ros_joint_pose_trajectory.so">
-    <ros>
-      <namespace>/</namespace>
-    </ros>
+    <ros><namespace>/</namespace></ros>
     <update_rate>50</update_rate>
   </plugin>
 </gazebo>
 
-<!-- 2D laser on the laser_link -->
+<!-- 2D laser — 360° so SLAM covers all directions from spawn -->
 <gazebo reference="laser_link">
   <sensor type="ray" name="base_laser">
     <pose>0 0 0 0 0 0</pose>
@@ -55,10 +49,6 @@
     <ray>
       <scan>
         <horizontal>
-          <!-- 360° FOV so the SLAM map covers everything around the robot
-               at spawn. Real Fetch only does ~220°, but the back blind spot
-               leaves the area behind the robot unmapped, which puts the
-               robot's start pose outside the costmap bounds. -->
           <samples>540</samples>
           <resolution>1</resolution>
           <min_angle>-3.14159</min_angle>
@@ -66,18 +56,14 @@
         </horizontal>
       </scan>
       <range>
-        <!-- min must be > robot footprint radius (0.30 m) so the laser
-             doesn't paint the robot's own base into the costmap as a
-             wall ring around itself. -->
-        <min>0.40</min>
+        <!-- 0.55 m clips out the robot's own body from the laser scan.
+             Laser is at x=0.235 on the robot; rear of cylinder is 0.515 m
+             away — must be clipped or it gets painted as a wall. -->
+        <min>0.55</min>
         <max>10.0</max>
         <resolution>0.01</resolution>
       </range>
-      <noise>
-        <type>gaussian</type>
-        <mean>0.0</mean>
-        <stddev>0.01</stddev>
-      </noise>
+      <noise><type>gaussian</type><mean>0.0</mean><stddev>0.01</stddev></noise>
     </ray>
     <plugin name="laser_controller" filename="libgazebo_ros_ray_sensor.so">
       <ros>
@@ -96,20 +82,11 @@
     <update_rate>15</update_rate>
     <camera>
       <horizontal_fov>1.0472</horizontal_fov>
-      <image>
-        <width>640</width>
-        <height>480</height>
-        <format>R8G8B8</format>
-      </image>
-      <clip>
-        <near>0.1</near>
-        <far>10.0</far>
-      </clip>
+      <image><width>640</width><height>480</height><format>R8G8B8</format></image>
+      <clip><near>0.1</near><far>10.0</far></clip>
     </camera>
     <plugin name="head_camera_controller" filename="libgazebo_ros_camera.so">
-      <ros>
-        <namespace>head_camera</namespace>
-      </ros>
+      <ros><namespace>head_camera</namespace></ros>
       <camera_name>head_camera</camera_name>
       <frame_name>head_camera_rgb_optical_frame</frame_name>
       <hack_baseline>0.07</hack_baseline>
@@ -118,21 +95,25 @@
   </sensor>
 </gazebo>
 
-<!-- Friction & material tweaks -->
+<!-- Wheel friction — high torque and damping for a 70 kg robot -->
 <gazebo reference="r_wheel_link">
   <mu1>2.0</mu1><mu2>2.0</mu2>
   <kp>1e8</kp><kd>50.0</kd>
   <fdir1>1 0 0</fdir1>
   <minDepth>0.001</minDepth>
-  <maxVel>0.1</maxVel>
+  <maxVel>0.5</maxVel>
 </gazebo>
 <gazebo reference="l_wheel_link">
   <mu1>2.0</mu1><mu2>2.0</mu2>
   <kp>1e8</kp><kd>50.0</kd>
   <fdir1>1 0 0</fdir1>
   <minDepth>0.001</minDepth>
-  <maxVel>0.1</maxVel>
+  <maxVel>0.5</maxVel>
 </gazebo>
 <gazebo reference="base_link">
   <material>Gazebo/Grey</material>
+  <!-- Zero friction on the base sled so it doesn't resist wheel-driven
+       motion while still preventing front/rear rocking. -->
+  <mu1>0.0</mu1>
+  <mu2>0.0</mu2>
 </gazebo>

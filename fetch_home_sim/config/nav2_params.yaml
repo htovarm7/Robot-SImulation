@@ -44,8 +44,8 @@ controller_server:
 
     progress_checker:
       plugin: nav2_controller::SimpleProgressChecker
-      required_movement_radius: 0.5
-      movement_time_allowance: 10.0
+      required_movement_radius: 0.1
+      movement_time_allowance: 30.0
 
     goal_checker:
       plugin: nav2_controller::SimpleGoalChecker
@@ -104,12 +104,12 @@ local_costmap:
       width: 4
       height: 4
       resolution: 0.05
-      robot_radius: 0.30
+      robot_radius: 0.28
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.35
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: true
@@ -125,9 +125,9 @@ local_costmap:
           clearing: true
           marking: true
           data_type: "LaserScan"
-          obstacle_min_range: 0.40
+          obstacle_min_range: 0.55
           obstacle_max_range: 5.5
-          raytrace_min_range: 0.40
+          raytrace_min_range: 0.55
           raytrace_max_range: 6.0
 
 global_costmap:
@@ -138,7 +138,7 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
-      robot_radius: 0.30
+      robot_radius: 0.28
       resolution: 0.05
       # Treat unmapped cells as free so the planner can drive into rooms
       # the laser hasn't seen yet (SLAM mode). Combined with
@@ -155,9 +155,9 @@ global_costmap:
           clearing: true
           marking: true
           data_type: "LaserScan"
-          obstacle_min_range: 0.40
+          obstacle_min_range: 0.55
           obstacle_max_range: 5.5
-          raytrace_min_range: 0.40
+          raytrace_min_range: 0.55
           raytrace_max_range: 6.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -165,7 +165,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.35
       always_send_full_costmap: true
 
 map_server:
@@ -231,3 +231,5 @@ velocity_smoother:
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
+    # smoothed output goes to /cmd_vel which the diff_drive plugin reads
+    smoothed_velocity_topic: "cmd_vel"

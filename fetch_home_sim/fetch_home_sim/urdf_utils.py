@@ -77,6 +77,20 @@ def prepare_fetch_urdf() -> str:
         raw,
     )
 
+    # Lower the base_link cylinder collision to act as a zero-friction sled.
+    # Original: xyz="0 0 0.20" length=0.33 → bottom 0.035 m above base_link,
+    # which is ~0.045 m above the floor. With only two sphere drive wheels
+    # the robot has no front/rear support and rocks (se tambalea). Dropping
+    # the cylinder to z=0.03 (bottom = 0.00 from base_link) makes it contact
+    # the floor as a wide flat disc. fetch_gazebo.xml sets mu=0 on base_link
+    # so it slides freely; wheels still provide all traction.
+    raw = re.sub(
+        r'(<origin rpy="0 0 0" xyz="0 0 )0\.20(" />\n      <geometry>\n        '
+        r'<cylinder length=")0\.33(" radius=")0\.28(")',
+        r'\g<1>0.03\g<2>0.06\g<3>0.27\g<4>',
+        raw, count=1,
+    )
+
     # Lock every non-driving joint as fixed. Without controllers, free
     # revolute/prismatic joints (arm, torso, grippers) flop under gravity
     # and the solver produces NaN velocities — which cascades into
@@ -145,7 +159,10 @@ def prepare_fetch_urdf() -> str:
         )
         raw = re.sub(pattern, replacement, raw, flags=re.DOTALL)
 
-    # Add passive caster wheels at the front and rear of base_link.
+    # Casters removed: base_link is kinematic so physics-based stability is
+    # not needed. The robot moves directly from velocity commands.
+    if False:  # kept for reference, disabled
+        pass  # Add passive caster wheels at the front and rear of base_link.
     # The original Fetch URDF ships without casters, so with only two drive
     # wheels the robot tips like a seesaw — any off-centre mass drops one
     # end. Two zero-friction spheres give 4-point contact (left/right drive
@@ -154,44 +171,8 @@ def prepare_fetch_urdf() -> str:
     # Geometry: drive wheel sphere radius = 0.065, joint z = 0.055325.
     # Spawned at z=0.01 → wheel bottom touches z=0.  Caster radius = 0.04,
     # centre z from base_link = 0.04 - 0.01 = 0.03 → same floor contact.
-    CASTERS = [
-        ("caster_front", 0.24,  0.0),
-        ("caster_rear",  -0.24, 0.0),
-    ]
-    caster_links = ""
-    caster_gazebo = ""
-    for name, cx, cy in CASTERS:
-        caster_links += f"""
-  <link name="{name}_link">
-    <inertial>
-      <mass value="0.01"/>
-      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>
-    </inertial>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry><sphere radius="0.04"/></geometry>
-    </collision>
-  </link>
-  <joint name="{name}_joint" type="fixed">
-    <origin rpy="0 0 0" xyz="{cx} {cy} 0.03"/>
-    <parent link="base_link"/>
-    <child link="{name}_link"/>
-  </joint>
-"""
-        caster_gazebo += f"""
-<gazebo reference="{name}_link">
-  <mu1>0.0</mu1><mu2>0.0</mu2>
-  <kp>1e8</kp><kd>10.0</kd>
-  <minDepth>0.001</minDepth>
-</gazebo>
-"""
-
     plugin_block = (PKG_URDF_DIR / "fetch_gazebo.xml").read_text()
-    raw = re.sub(
-        r"</robot>\s*$",
-        caster_links + plugin_block + caster_gazebo + "\n</robot>\n",
-        raw,
-    )
+    raw = re.sub(r"</robot>\s*$", plugin_block + "\n</robot>\n", raw)
     return raw
 
 

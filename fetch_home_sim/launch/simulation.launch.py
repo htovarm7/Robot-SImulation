@@ -89,7 +89,7 @@ def _prepare_urdfs(context, *args, **kwargs):
         arguments=[
             "-entity", "fetch",
             "-topic", "robot_description",
-            "-x", "0.0", "-y", "-1.5", "-z", "0.01",
+            "-x", "0.0", "-y", "-1.5", "-z", "0.10",
             "-Y", "1.5708",
         ],
     )
