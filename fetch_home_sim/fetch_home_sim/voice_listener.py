@@ -71,7 +71,7 @@ class VoiceListener(Node):
                 return
             try:
                 result = model.transcribe(audio, language="en", fp16=False)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  
                 self.get_logger().warn(f"whisper failed: {exc}")
                 return
             text = (result.get("text") or "").strip()
@@ -86,7 +86,7 @@ class VoiceListener(Node):
         silence_count = 0
         speech_count = 0
         in_speech = False
-        recent = collections.deque(maxlen=5)  # pre-roll
+        recent = collections.deque(maxlen=5) 
 
         with sd.InputStream(samplerate=sr, channels=1, blocksize=frame_len, device=device) as stream:
             while rclpy.ok():

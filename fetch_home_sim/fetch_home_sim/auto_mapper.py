@@ -1,13 +1,6 @@
-"""Drive the robot through a fixed exploration tour to seed the SLAM map.
+"""Drive a pre-defined exploration tour to seed the SLAM map, then return home.
 
-Reads ``exploration:`` from waypoints.yaml, sends each pose in sequence to
-Nav2's ``/navigate_to_pose`` action, then publishes a single status string
-"READY" to ``/dispatcher_status`` and exits. After this finishes once the
-SLAM map covers the whole house and the regular text/voice commands can
-plan anywhere.
-
-Run AFTER ``simulation`` and ``navigation`` launches are up:
-
+Run AFTER simulation and navigation launches are up:
     ros2 run fetch_home_sim auto_mapper
 """
 from __future__ import annotations
@@ -39,8 +32,6 @@ def yaw_to_quat(yaw: float) -> Quaternion:
 class AutoMapper(Node):
     def __init__(self) -> None:
         super().__init__("auto_mapper")
-        # use_sim_time MUST match Nav2 (Gazebo publishes /clock). Without it,
-        # goal headers carry wall-clock stamps and Nav2 rejects them as stale.
         self.set_parameters([rclpy.parameter.Parameter(
             "use_sim_time", rclpy.Parameter.Type.BOOL, True)])
         self.declare_parameter("waypoints_file", "")
@@ -57,80 +48,57 @@ class AutoMapper(Node):
 
         self.poses: list[dict] = cfg.get("exploration") or []
         if not self.poses:
-            self.get_logger().error(
-                "No 'exploration' list in waypoints.yaml — nothing to do."
-            )
+            self.get_logger().error("No 'exploration' list in waypoints.yaml.")
             sys.exit(1)
 
         self.timeout = float(self.get_parameter("per_goal_timeout").value)
         self.client = ActionClient(self, NavigateToPose, "/navigate_to_pose")
         self.status_pub = self.create_publisher(String, "/dispatcher_status", 10)
-
         self._map_ready = False
-        self._map_sub = self.create_subscription(
-            OccupancyGrid, "/map", self._on_map, 1)
+        self._map_sub = self.create_subscription(OccupancyGrid, "/map", self._on_map, 1)
 
         self.get_logger().info(
-            f"AutoMapper loaded {len(self.poses)} exploration poses. "
-            f"Per-goal timeout = {self.timeout:.0f}s."
+            f"AutoMapper: {len(self.poses)} poses, {self.timeout:.0f}s timeout each."
         )
 
     def _on_map(self, msg: OccupancyGrid) -> None:
         free = sum(1 for c in msg.data if c == 0)
         if free > 200 and not self._map_ready:
             self._map_ready = True
-            self.get_logger().info(
-                f"Map ready: {msg.info.width}x{msg.info.height} cells, "
-                f"{free} free. Starting tour."
-            )
+            self.get_logger().info(f"Map ready: {msg.info.width}x{msg.info.height}, {free} free cells.")
 
-    # ------------------------------------------------------------------
-    # Public driver
-    # ------------------------------------------------------------------
     def run(self) -> bool:
-        self.get_logger().info("waiting for /navigate_to_pose action server...")
+        self.get_logger().info("Waiting for Nav2 action server...")
         if not self.client.wait_for_server(timeout_sec=15.0):
-            self.get_logger().error("Nav2 action server not available — is navigation.launch.py up?")
+            self.get_logger().error("Nav2 unavailable — is navigation.launch.py running?")
             return False
 
-        self.get_logger().info("waiting for SLAM map to populate (need >200 free cells)...")
+        self.get_logger().info("Waiting for SLAM map (>200 free cells)...")
         deadline = time.time() + 30.0
         while not self._map_ready and time.time() < deadline and rclpy.ok():
             rclpy.spin_once(self, timeout_sec=0.5)
         if not self._map_ready:
-            self.get_logger().warn("Map did not populate in 30s — starting anyway.")
+            self.get_logger().warn("Map not ready in 30s — starting anyway.")
         else:
-            # Give nav2 costmap a moment to receive the map from slam_toolbox
-            self.get_logger().info("Map received. Waiting 3s for costmap to update...")
+            self.get_logger().info("Map ready. Waiting 3s for costmap...")
             deadline2 = time.time() + 3.0
             while time.time() < deadline2 and rclpy.ok():
                 rclpy.spin_once(self, timeout_sec=0.1)
 
         for i, p in enumerate(self.poses, 1):
-            self._announce(
-                f"[{i}/{len(self.poses)}] going to "
-                f"x={p['x']:.2f} y={p['y']:.2f} yaw={p.get('yaw', 0.0):.2f}"
-            )
-            ok = self._send_and_wait(p["x"], p["y"], p.get("yaw", 0.0))
-            if not ok:
-                self.get_logger().warn(
-                    f"goal {i} failed/timed out — continuing tour anyway"
-                )
+            self._announce(f"[{i}/{len(self.poses)}] → x={p['x']:.2f} y={p['y']:.2f}")
+            if not self._send_and_wait(p["x"], p["y"], p.get("yaw", 0.0)):
+                self.get_logger().warn(f"Goal {i} failed — continuing tour.")
 
-        self._announce("=" * 60)
-        self._announce("MAPPING TOUR COMPLETE — robot is READY for commands.")
-        self._announce("=" * 60)
+        self._announce("=" * 50)
+        self._announce("MAPPING COMPLETE — robot is READY for commands.")
+        self._announce("=" * 50)
         return True
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
     def _send_and_wait(self, x: float, y: float, yaw: float) -> bool:
         goal = NavigateToPose.Goal()
         goal.pose = PoseStamped()
         goal.pose.header.frame_id = "map"
-        # Leaving stamp at zero is treated as "use latest" by tf2 — avoids
-        # stale-stamp rejections if our clock is out of sync with Nav2's.
         goal.pose.pose.position.x = float(x)
         goal.pose.pose.position.y = float(y)
         goal.pose.pose.orientation = yaw_to_quat(float(yaw))
@@ -138,17 +106,11 @@ class AutoMapper(Node):
         future = self.client.send_goal_async(goal)
         rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
         if not future.done():
-            self.get_logger().warn("goal send timed out")
             return False
 
         gh = future.result()
         if not gh.accepted:
-            self.get_logger().warn(
-                "Nav2 rejected the goal. Common causes: Nav2 not fully "
-                "active yet (wait ~10s after navigation.launch.py); planner "
-                "failed (track_unknown_space=true with empty SLAM map); "
-                "or the goal sits in a lethal cell."
-            )
+            self.get_logger().warn("Nav2 rejected the goal.")
             return False
 
         result_future = gh.get_result_async()
@@ -162,8 +124,7 @@ class AutoMapper(Node):
             gh.cancel_goal_async()
             return False
 
-        status = result_future.result().status
-        return status == GoalStatus.STATUS_SUCCEEDED
+        return result_future.result().status == GoalStatus.STATUS_SUCCEEDED
 
     def _announce(self, text: str) -> None:
         self.get_logger().info(text)

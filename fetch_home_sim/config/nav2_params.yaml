@@ -25,10 +25,6 @@ bt_navigator:
     odom_topic: /odom
     bt_loop_duration: 10
     default_server_timeout: 20
-    # plugin_lib_names omitted on purpose — Nav2 Humble's defaults include
-    # every BT node referenced by the shipped behavior tree XMLs (incl.
-    # RemovePassedGoals). Listing a custom subset risks missing one and
-    # crashing bt_navigator at activation.
 
 controller_server:
   ros__parameters:
@@ -81,8 +77,6 @@ controller_server:
       short_circuit_trajectory_evaluation: true
       stateful: true
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      # BaseObstacle high + PathDist/PathAlign low = robot deviates from path
-      # to avoid walls instead of rigidly following a path that hugs them.
       BaseObstacle.scale: 2.0
       PathAlign.scale: 4.0
       PathAlign.forward_point_distance: 0.1
@@ -131,8 +125,6 @@ local_costmap:
           obstacle_max_range: 5.5
           raytrace_min_range: 0.55
           raytrace_max_range: 6.0
-          # Obstacle marks expire after 2 s — old stale marks that trapped
-          # the robot in a corner get cleared automatically.
           observation_persistence: 2.0
 
 global_costmap:
@@ -145,9 +137,6 @@ global_costmap:
       robot_base_frame: base_link
       robot_radius: 0.32
       resolution: 0.05
-      # Treat unmapped cells as free so the planner can drive into rooms
-      # the laser hasn't seen yet (SLAM mode). Combined with
-      # planner.allow_unknown=true this lets the robot explore.
       track_unknown_space: false
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
@@ -189,8 +178,6 @@ planner_server:
       max_iterations: 1000000
       max_on_approach_iterations: 1000
       max_planning_time: 3.0
-      # cost_travel_multiplier > 1 makes the planner route away from walls
-      # instead of hugging them — paths run through the centre of corridors.
       cost_travel_multiplier: 3.0
       use_final_approach_orientation: false
 
@@ -216,7 +203,6 @@ behavior_server:
     max_rotational_vel: 0.8
     min_rotational_vel: 0.2
     rotational_acc_lim: 2.0
-    # Backup velocity limits — required or DriveOnHeading always aborts
     max_linear_vel: 0.15
     min_linear_vel: 0.05
     linear_acc_lim: 0.5
@@ -246,5 +232,4 @@ velocity_smoother:
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
-    # smoothed output goes to /cmd_vel which the diff_drive plugin reads
     smoothed_velocity_topic: "cmd_vel"

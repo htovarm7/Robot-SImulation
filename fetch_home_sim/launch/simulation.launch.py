@@ -20,17 +20,9 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
-# Static scenario items: name → (urdf_key, x, y, z, yaw)
-#
-# Coordinate system: kitchen occupies y ∈ [0.75, 7], living room y ∈ [-7, -0.75].
-# The doorway is centered at x=0. Kitchen URDF spans roughly +4.5m east and
-# +4m north of its spawn point, so we anchor it in the western part of the
-# kitchen room.
 SCENE_LAYOUT = [
-    # Kitchen: anchor at (-3, 1.0). Internal blocks reach to ~(1.5, 5).
     ("kitchen_main", "kitchen", -3.0, 1.0, 0.0, 0.0),
 
-    # Living room (south of partition).
     ("dining_table", "table",     -4.0, -2.5, 0.0, 0.0),
     ("couch",        "couch",     -1.5, -6.0, 0.0, 0.0),
     ("armchair",     "armchair",   3.0, -5.5, 0.0, 1.5708),
@@ -41,11 +33,9 @@ SCENE_LAYOUT = [
 
 def _prepare_urdfs(context, *args, **kwargs):
     """Generate prepared URDFs and emit spawn actions referencing them."""
-    # Import here so the launch system loads even if Python path setup is partial.
     import sys
     pkg_root = Path(get_package_share_directory("fetch_home_sim")).parent.parent
     src_root = pkg_root.parent  # workspace src
-    # Walk back to repo root regardless of where we were installed.
     candidate = Path(__file__).resolve()
     repo_root = None
     for parent in candidate.parents:

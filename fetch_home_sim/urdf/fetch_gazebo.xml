@@ -1,10 +1,7 @@
-<!-- Gazebo Classic plugins layered onto the original Fetch URDF.
-     This block is concatenated to fetch.urdf at launch time. -->
+<!-- Gazebo Classic plugins for the Fetch robot. Concatenated to fetch.urdf at launch. -->
 <gazebo>
   <plugin name="gazebo_ros_diff_drive" filename="libgazebo_ros_diff_drive.so">
-    <ros>
-      <namespace>/</namespace>
-    </ros>
+    <ros><namespace>/</namespace></ros>
     <update_rate>30</update_rate>
     <left_joint>l_wheel_joint</left_joint>
     <right_joint>r_wheel_joint</right_joint>
@@ -19,8 +16,6 @@
     <odometry_topic>odom</odometry_topic>
     <odometry_frame>odom</odometry_frame>
     <robot_base_frame>base_link</robot_base_frame>
-    <!-- World-pose odometry: reads the robot's actual Gazebo pose instead
-         of integrating wheel encoders. More reliable when wheels may slip. -->
     <odometry_source>0</odometry_source>
   </plugin>
 
@@ -40,7 +35,7 @@
   </plugin>
 </gazebo>
 
-<!-- 2D laser — 360° so SLAM covers all directions from spawn -->
+<!-- 2D laser — 360° FOV so SLAM covers all directions from spawn -->
 <gazebo reference="laser_link">
   <sensor type="ray" name="base_laser">
     <pose>0 0 0 0 0 0</pose>
@@ -56,9 +51,8 @@
         </horizontal>
       </scan>
       <range>
-        <!-- 0.55 m clips out the robot's own body from the laser scan.
-             Laser is at x=0.235 on the robot; rear of cylinder is 0.515 m
-             away — must be clipped or it gets painted as a wall. -->
+        <!-- 0.55 m clips the robot's own body from the scan.
+             Laser is at x=0.235; back of base cylinder is ~0.515 m away. -->
         <min>0.55</min>
         <max>10.0</max>
         <resolution>0.01</resolution>
@@ -95,7 +89,7 @@
   </sensor>
 </gazebo>
 
-<!-- Wheel friction — high torque and damping for a 70 kg robot -->
+<!-- Wheel friction — high torque for a 70 kg robot -->
 <gazebo reference="r_wheel_link">
   <mu1>2.0</mu1><mu2>2.0</mu2>
   <kp>1e8</kp><kd>50.0</kd>
@@ -112,8 +106,7 @@
 </gazebo>
 <gazebo reference="base_link">
   <material>Gazebo/Grey</material>
-  <!-- Zero friction on the base sled so it doesn't resist wheel-driven
-       motion while still preventing front/rear rocking. -->
+  <!-- Zero friction so the base sled slides freely; wheels provide traction -->
   <mu1>0.0</mu1>
   <mu2>0.0</mu2>
 </gazebo>

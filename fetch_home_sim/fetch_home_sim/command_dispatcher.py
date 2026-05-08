@@ -1,22 +1,15 @@
 """Parse free-form speech → Nav2 goal + optional arm reach.
 
-Subscribes:
-  /spoken_command (std_msgs/String)
+Subscribes:  /spoken_command (std_msgs/String)
+Publishes:   /reach_target (std_msgs/String)  — on arrival at a pick goal
+             /dispatcher_status (std_msgs/String) — human-readable status
 
-Sends:
-  Nav2 NavigateToPose action  (action server: /navigate_to_pose)
-  /reach_target (std_msgs/String)  — consumed by arm_reach to do the
-  pre-grasp motion when the intent is "pick up <object>".
+Intent grammar:
+  pick up | grab | fetch | get  <object> [from <place>]
+  go to | move to | head to     <place>
+  stop | cancel | halt           → cancel active goal
 
-Intent grammar is intentionally tiny — no LLM needed:
-
-  pick up | grab | bring | get | fetch  <object>  [from <place>]
-  go to | move to | head to            <place>
-  stop | cancel | halt                  → cancel current goal
-
-If a sentence contains a known object word we look up the mapped place in
-``waypoints.yaml::objects``; if it contains a known place word we use that
-directly. Multiple matches: place wins over object-implied place.
+Objects and places are defined in waypoints.yaml.
 """
 from __future__ import annotations
 
@@ -65,16 +58,12 @@ class CommandDispatcher(Node):
         self._pending_reach: str | None = None
 
         self.get_logger().info(
-            f"Loaded {len(self.waypoints)} waypoints, "
-            f"{len(self.objects)} objects. Ready on /spoken_command."
+            f"Loaded {len(self.waypoints)} waypoints, {len(self.objects)} objects. "
+            "Ready on /spoken_command."
         )
 
-    # ------------------------------------------------------------------
-    # Intent parsing
-    # ------------------------------------------------------------------
     def parse(self, text: str) -> dict | None:
-        t = text.lower().strip().rstrip(".!?")
-        t = re.sub(r"\s+", " ", t)
+        t = re.sub(r"\s+", " ", text.lower().strip().rstrip(".!?"))
 
         if any(w in t for w in STOP_WORDS):
             return {"action": "stop"}
@@ -88,20 +77,14 @@ class CommandDispatcher(Node):
                 return None
             return {"action": "pick", "object": obj or "object", "place": place}
 
-        if any(v in t for v in GO_VERBS) and explicit_place:
-            return {"action": "goto", "place": explicit_place}
-
-        if explicit_place:
+        if (any(v in t for v in GO_VERBS) or explicit_place) and explicit_place:
             return {"action": "goto", "place": explicit_place}
 
         return None
 
     def _find_place(self, t: str) -> str | None:
-        # Try multi-word names first (e.g. "living room").
-        candidates = sorted(self.waypoints.keys(), key=len, reverse=True)
-        for name in candidates:
-            spoken = name.replace("_", " ")
-            if re.search(rf"\b{re.escape(spoken)}\b", t):
+        for name in sorted(self.waypoints.keys(), key=len, reverse=True):
+            if re.search(rf"\b{re.escape(name.replace('_', ' '))}\b", t):
                 return name
         return None
 
@@ -111,88 +94,73 @@ class CommandDispatcher(Node):
                 return obj
         return None
 
-    # ------------------------------------------------------------------
-    # ROS callbacks
-    # ------------------------------------------------------------------
     def on_command(self, msg: String) -> None:
-        # Loud, unambiguous ack so you can confirm the message reached us.
-        self.get_logger().info("=" * 60)
-        self.get_logger().info(f"COMMAND RECEIVED: {msg.data!r}")
-        self.get_logger().info("=" * 60)
+        self.get_logger().info("=" * 50)
+        self.get_logger().info(f"COMMAND: {msg.data!r}")
+        self.get_logger().info("=" * 50)
 
         intent = self.parse(msg.data)
         if intent is None:
-            self._say(f"could not parse intent from: {msg.data!r}")
+            self._say(f"Could not parse: {msg.data!r}")
             return
 
-        self.get_logger().info(f"parsed intent: {intent}")
+        self.get_logger().info(f"Intent: {intent}")
 
         if intent["action"] == "stop":
             self._cancel_goal()
-            self._say("stopping")
+            self._say("Stopping.")
             return
 
         place = intent["place"]
         wp = self.waypoints.get(place)
         if wp is None:
-            self._say(f"unknown place: {place}")
+            self._say(f"Unknown place: {place}")
             return
 
         if intent["action"] == "pick":
             self._pending_reach = intent["object"]
-            self._say(f"going to {place} to pick up the {intent['object']}")
+            self._say(f"Going to {place} to pick up {intent['object']}.")
         else:
             self._pending_reach = None
-            self._say(f"going to {place}")
+            self._say(f"Going to {place}.")
 
         self._send_goal(wp["x"], wp["y"], wp.get("yaw", 0.0))
 
-    # ------------------------------------------------------------------
-    # Nav2 plumbing
-    # ------------------------------------------------------------------
     def _send_goal(self, x: float, y: float, yaw: float) -> None:
-        self.get_logger().info(f"waiting for /navigate_to_pose action server...")
+        self.get_logger().info("Waiting for Nav2 action server...")
         if not self.nav_client.wait_for_server(timeout_sec=10.0):
-            self._say(
-                "Nav2 action server NOT AVAILABLE. Is navigation.launch.py "
-                "running, and has it finished activating? (Watch its log for "
-                "'Creating bond timer...')."
-            )
+            self._say("Nav2 action server unavailable.")
             return
         goal = NavigateToPose.Goal()
         goal.pose = PoseStamped()
         goal.pose.header.frame_id = "map"
-        # Leave stamp at zero — tf2 treats it as "latest". Wall-time stamps
-        # under sim_time get rejected as stale; this avoids that hazard.
         goal.pose.pose.position.x = float(x)
         goal.pose.pose.position.y = float(y)
         goal.pose.pose.orientation = yaw_to_quat(float(yaw))
-        self.get_logger().info(f"sending Nav2 goal: x={x:.2f} y={y:.2f} yaw={yaw:.2f}")
+        self.get_logger().info(f"Sending goal: x={x:.2f} y={y:.2f} yaw={yaw:.2f}")
         future = self.nav_client.send_goal_async(goal)
         future.add_done_callback(self._on_goal_response)
 
     def _on_goal_response(self, future) -> None:
         gh = future.result()
         if not gh.accepted:
-            self._say("nav2 REJECTED the goal")
+            self._say("Nav2 rejected the goal.")
             return
-        self.get_logger().info("nav2 ACCEPTED the goal — driving...")
+        self.get_logger().info("Goal accepted — driving...")
         self._goal_handle = gh
         gh.get_result_async().add_done_callback(self._on_result)
 
     def _on_result(self, future) -> None:
-        result = future.result()
-        status = result.status
+        status = future.result().status
         if status == GoalStatus.STATUS_SUCCEEDED:
-            self._say("arrived")
+            self._say("Arrived.")
             if self._pending_reach is not None:
                 m = String()
                 m.data = self._pending_reach
                 self.pub_reach.publish(m)
-                self.get_logger().info(f"requesting arm reach for: {self._pending_reach}")
                 self._pending_reach = None
         else:
-            self._say(f"navigation ended with status {status}")
+            self._say(f"Navigation ended with status {status}.")
         self._goal_handle = None
 
     def _cancel_goal(self) -> None:
