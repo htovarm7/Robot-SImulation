@@ -52,9 +52,7 @@
         <collision name="e_col"><pose>7 0 1.25 0 0 0</pose><geometry><box><size>0.1 14 2.5</size></box></geometry></collision>
         <visual name="e_vis"><pose>7 0 1.25 0 0 0</pose><geometry><box><size>0.1 14 2.5</size></box></geometry><material><ambient>0.92 0.90 0.84 1</ambient><diffuse>0.92 0.90 0.84 1</diffuse></material></visual>
 
-        <!-- partition between kitchen (y>0) and living room (y<0).
-             Doorway is 2.0m wide (±1.0 m from centre) so the inflated
-             robot footprint (0.30 + 0.35 = 0.65 m) fits with margin. -->
+        <!-- partition — 2 m doorway (±1 m from centre) -->
         <collision name="p_w_col"><pose>-4.0 0 1.25 0 0 0</pose><geometry><box><size>6.0 0.1 2.5</size></box></geometry></collision>
         <visual name="p_w_vis"><pose>-4.0 0 1.25 0 0 0</pose><geometry><box><size>6.0 0.1 2.5</size></box></geometry><material><ambient>0.85 0.82 0.78 1</ambient><diffuse>0.85 0.82 0.78 1</diffuse></material></visual>
         <collision name="p_e_col"><pose>4.0 0 1.25 0 0 0</pose><geometry><box><size>6.0 0.1 2.5</size></box></geometry></collision>
@@ -75,6 +73,48 @@
       <pose>0 -3.5 0.005 0 0 0</pose>
       <link name="l">
         <visual name="v"><geometry><box><size>13.8 6.9 0.01</size></box></geometry><material><ambient>0.55 0.40 0.30 1</ambient><diffuse>0.55 0.40 0.30 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- Laser-reflective collision boxes around key furniture items.
+         The TV and couch meshes can be partially transparent to laser rays
+         so the costmap misses them. These invisible boxes guarantee the
+         obstacle_layer always sees them. -->
+    <!-- Invisible laser-opaque collision boxes for furniture the laser may
+         partially miss. Positions match SCENE_LAYOUT in simulation.launch.py. -->
+    <model name="couch_blocker">
+      <static>true</static>
+      <pose>-1.5 -6.0 0.3 0 0 0</pose>
+      <link name="l">
+        <collision name="c"><geometry><box><size>2.2 1.0 0.7</size></box></geometry></collision>
+      </link>
+    </model>
+    <model name="armchair_blocker">
+      <static>true</static>
+      <pose>3.0 -5.5 0.3 0 0 0</pose>
+      <link name="l">
+        <collision name="c"><geometry><box><size>1.0 1.0 0.7</size></box></geometry></collision>
+      </link>
+    </model>
+    <model name="tv_table_blocker">
+      <static>true</static>
+      <pose>5.5 -3.5 0.4 0 0 0</pose>
+      <link name="l">
+        <collision name="c"><geometry><box><size>0.6 1.5 0.9</size></box></geometry></collision>
+      </link>
+    </model>
+    <model name="dining_table_blocker">
+      <static>true</static>
+      <pose>-4.0 -2.5 0.3 0 0 0</pose>
+      <link name="l">
+        <collision name="c"><geometry><box><size>1.6 0.9 0.7</size></box></geometry></collision>
+      </link>
+    </model>
+    <model name="kitchen_counter_blocker">
+      <static>true</static>
+      <pose>-1.5 2.5 0.4 0 0 0</pose>
+      <link name="l">
+        <collision name="c"><geometry><box><size>5.5 0.7 0.9</size></box></geometry></collision>
       </link>
     </model>
 

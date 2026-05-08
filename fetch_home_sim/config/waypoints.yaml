@@ -2,29 +2,29 @@
 # Kitchen is north (y > 0.75); living room is south (y < -0.75).
 waypoints:
   kitchen:
-    x: 0.5
-    y: 3.0
-    yaw: 1.5708       # facing the island/banana
+    x: 0.0
+    y: 2.0
+    yaw: 1.5708       # just past the doorway, clear of all furniture
   living_room:
     x: 0.0
     y: -3.0
-    yaw: -1.5708
+    yaw: 1.5708       # center of living room, facing kitchen
   couch:
     x: -1.5
-    y: -4.8
-    yaw: -1.5708      # standing in front of the couch, facing it
+    y: -5.0
+    yaw: 1.5708       # in front of the couch
   tv:
-    x: 4.0
+    x: 2.0
     y: -3.5
     yaw: 0.0
   armchair:
-    x: 3.0
-    y: -4.3
-    yaw: -1.5708
+    x: 2.0
+    y: -5.0
+    yaw: 1.5708
   dining_table:
-    x: -2.7
+    x: -2.5
     y: -2.5
-    yaw: 3.1416
+    yaw: 0.0
   home:
     x: 0.0
     y: -1.5
@@ -34,18 +34,27 @@ waypoints:
 # the laser sweeps the whole house, then returns to "home". Tune to taste —
 # more points = denser map, longer startup.
 exploration:
-  # --- Living room first (same room as spawn, no wall crossing needed) ---
-  - { x:  0.0, y: -2.5, yaw:  0.0    }   # center of living room
-  - { x: -4.0, y: -2.5, yaw:  3.1416 }   # dining table area
-  - { x: -4.0, y: -5.5, yaw:  0.0    }   # SW corner
-  - { x:  2.0, y: -5.5, yaw:  0.0    }   # SE corner
-  - { x:  4.5, y: -3.5, yaw:  1.5708 }   # TV area
-  - { x:  0.0, y: -1.2, yaw:  1.5708 }   # doorway approach, facing kitchen
-  # --- Cross into kitchen ---
-  - { x:  0.0, y:  1.0, yaw:  1.5708 }   # just inside kitchen
-  - { x: -3.0, y:  3.0, yaw:  1.5708 }   # west side of kitchen
-  - { x: -3.0, y:  5.5, yaw:  0.0    }   # NW corner
-  - { x:  2.5, y:  5.5, yaw: -1.5708 }   # NE corner
+  # Furniture positions to AVOID (from SCENE_LAYOUT):
+  #   couch    (-1.5, -6.0)   dining_table (-4.0, -2.5)
+  #   armchair ( 3.0, -5.5)   tv+table     ( 5.5, -3.5)
+  #   kitchen  (-3.0,  1.0 extends to ~1.5, 5.0)
+  #
+  # Rule: stay ≥ 1.5m from every furniture centre, never go y < -5.
+
+  # --- Living room ---
+  - { x:  0.0, y: -2.5, yaw:  0.0    }   # centre
+  - { x: -2.0, y: -2.0, yaw:  3.1416 }   # west (clear of dining table at -4,-2.5)
+  - { x: -2.0, y: -4.5, yaw:  0.0    }   # SW (clear of couch at -1.5,-6)
+  - { x:  0.5, y: -4.5, yaw:  0.0    }   # south centre (clear of couch)
+  - { x:  2.0, y: -3.5, yaw:  1.5708 }   # east (clear of armchair at 3,-5.5 & TV at 5.5)
+  - { x:  0.0, y: -1.2, yaw:  1.5708 }   # doorway approach
+
+  # --- Kitchen ---
+  - { x:  0.0, y:  2.0, yaw:  1.5708 }   # entrance
+  - { x: -2.5, y:  3.0, yaw:  1.5708 }   # west
+  - { x: -2.5, y:  5.5, yaw:  0.0    }   # NW corner
+  - { x:  0.0, y:  5.5, yaw: -1.5708 }   # north centre
+  - { x:  2.0, y:  3.5, yaw: -1.5708 }   # east (clear of kitchen counter)
   - { x:  0.0, y: -1.5, yaw:  1.5708 }   # back home
 
 objects:

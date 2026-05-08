@@ -44,7 +44,7 @@ class AutoMapper(Node):
         self.set_parameters([rclpy.parameter.Parameter(
             "use_sim_time", rclpy.Parameter.Type.BOOL, True)])
         self.declare_parameter("waypoints_file", "")
-        self.declare_parameter("per_goal_timeout", 60.0)
+        self.declare_parameter("per_goal_timeout", 90.0)
 
         wp_file = self.get_parameter("waypoints_file").value
         if not wp_file:
